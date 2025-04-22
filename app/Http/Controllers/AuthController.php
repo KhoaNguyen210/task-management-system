@@ -10,22 +10,13 @@ use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
-    /**
-     * Show the login form.
-     *
-     * @return \Illuminate\View\View
-     */
+    // Show login form
     public function showLoginForm()
     {
         return view('auth.login');
     }
 
-    /**
-     * Handle login request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\RedirectResponse
-     */
+    // Handle login request
     public function login(Request $request)
     {
         $request->validate([
@@ -35,23 +26,21 @@ class AuthController extends Controller
 
         $user = User::where('username', $request->username)->first();
 
-        if (!$user) {
-            return back()->withErrors(['username' => 'Tên đăng nhập không tồn tại.']);
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            if ($user) {
+                $user->increment('failed_login_attempts');
+                if ($user->failed_login_attempts >= 5) {
+                    $user->is_locked = true;
+                    $user->save();
+                    return back()->withErrors(['username' => 'Tài khoản đã bị khóa do nhập sai quá 5 lần.']);
+                }
+                $user->save();
+            }
+            return back()->withErrors(['username' => 'Tên đăng nhập mật khẩu không đúng.']);
         }
 
         if ($user->is_locked) {
             return back()->withErrors(['username' => 'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.']);
-        }
-
-        if (!Hash::check($request->password, $user->password)) {
-            $user->increment('failed_login_attempts');
-            if ($user->failed_login_attempts >= 5) {
-                $user->is_locked = true;
-                $user->save();
-                return back()->withErrors(['username' => 'Tài khoản đã bị khóa do nhập sai quá 5 lần.']);
-            }
-            $user->save();
-            return back()->withErrors(['password' => 'Mật khẩu không đúng.']);
         }
 
         $user->failed_login_attempts = 0;
@@ -76,12 +65,7 @@ class AuthController extends Controller
         }
     }
 
-    /**
-     * Handle logout request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\RedirectResponse
-     */
+    // Handle logout request
     public function logout(Request $request)
     {
         if ($request->has('confirm') && $request->confirm === '0') {
