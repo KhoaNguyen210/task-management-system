@@ -20,6 +20,10 @@ return new class extends Migration
             $table->unsignedInteger('failed_login_attempts')->default(0);
             $table->boolean('is_locked')->default(false);
             $table->timestamps();
+
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
         });
     }
 

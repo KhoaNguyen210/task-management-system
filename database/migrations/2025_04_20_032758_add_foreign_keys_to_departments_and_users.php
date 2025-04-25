@@ -8,13 +8,15 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('departments', function (Blueprint $table) {
-            $table->foreign('head_id')->references('user_id')->on('users')->onDelete('set null');
-        });
+        if (Schema::hasTable('users') && Schema::hasTable('departments')) {
+            Schema::table('departments', function (Blueprint $table) {
+                $table->foreign('head_id')->references('user_id')->on('users')->onDelete('set null');
+            });
 
-        Schema::table('users', function (Blueprint $table) {
-            $table->foreign('department_id')->references('department_id')->on('departments')->onDelete('restrict');
-        });
+            Schema::table('users', function (Blueprint $table) {
+                $table->foreign('department_id')->references('department_id')->on('departments')->onDelete('restrict');
+            });
+        }
     }
 
     public function down(): void

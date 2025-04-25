@@ -13,6 +13,10 @@ return new class extends Migration
             $table->string('name');
             $table->unsignedBigInteger('head_id')->nullable();
             $table->timestamps();
+
+            $table->engine = 'InnoDB';
+            $table->charset = 'utf8mb4';
+            $table->collation = 'utf8mb4_unicode_ci';
         });
     }
 
