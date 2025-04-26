@@ -10,7 +10,7 @@
     <nav class="bg-blue-800 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">
             <div class="flex items-center">
-                <img src="{{ asset('images/logo.png') }}" alt="Logo Hệ thống" class="h-10 mr-4">
+                {{-- <img src="{{ asset('images/logo.png') }}" alt="Logo Hệ thống" class="h-10 mr-4"> --}}
                 <a href="{{ route('home') }}" class="text-xl font-bold">Hệ thống quản lý công việc</a>
             </div>
             <div class="flex items-center space-x-4">
@@ -28,7 +28,6 @@
     <div class="container mx-auto mt-8 px-4 pb-16">
         <div class="flex justify-between items-center mb-8">
             <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Dashboard Trưởng Bộ môn</h2>
-            {{-- Link đến trang phân công, dùng tên route đã đổi --}}
             <a href="{{ route('tasks.assign') }}" class="bg-blue-600 text-white py-2 px-4 md:py-3 md:px-6 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md transform hover:scale-105 text-sm md:text-base">Phân công công việc</a>
         </div>
 
@@ -56,20 +55,19 @@
                 <h3 class="text-xl md:text-2xl font-semibold text-gray-700">Danh sách công việc đã phân công</h3>
                 <button onclick="window.location.reload();" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition duration-200 text-sm">Làm mới</button>
             </div>
-            <table class="min-w-full bg-white border rounded-lg">
+            <table class="min-w-full bg-white border border-gray-200 rounded-lg">
                 <thead>
                     <tr class="bg-gray-200 text-gray-600 uppercase text-sm leading-normal">
                         <th class="py-3 px-6 text-left">Tên công việc</th>
                         <th class="py-3 px-6 text-left">Người thực hiện</th>
                         <th class="py-3 px-6 text-center">Thời hạn</th>
                         <th class="py-3 px-6 text-center">Trạng thái</th>
-                        <th class="py-3 px-6 text-left">Tiến độ</th>
                         <th class="py-3 px-6 text-center">Hành động</th>
                     </tr>
                 </thead>
                 <tbody class="text-gray-600 text-sm font-light divide-y divide-gray-200">
                     @forelse ($tasks as $task)
-                        <tr class="border-b border-gray-200 hover:bg-gray-100">
+                        <tr class="hover:bg-gray-100">
                             <td class="py-3 px-6 text-left whitespace-nowrap font-medium">{{ $task->title }}</td>
                             <td class="py-3 px-6 text-left">
                                 @if($task->assignedUsers->isNotEmpty())
@@ -100,7 +98,6 @@
                                     {{ $task->status }}
                                 </span>
                             </td>
-                            <td class="py-4 px-6">Tiến độ</td>
                             <td class="py-3 px-6 text-center">
                                 <div class="flex item-center justify-center space-x-2">
                                     <a href="#" {{-- href="{{ route('tasks.show', $task->id) }}" --}} class="text-blue-600 hover:text-blue-900" title="Xem chi tiết">
