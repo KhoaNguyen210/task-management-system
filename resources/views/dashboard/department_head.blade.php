@@ -10,7 +10,7 @@
     <nav class="bg-blue-800 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">
             <div class="flex items-center">
-                {{-- <img src="{{ asset('images/logo.png') }}" alt="Logo Hệ thống" class="h-10 mr-4"> --}}
+                <img src="{{ asset('images/logo.png') }}" alt="Logo Hệ thống" class="h-10 mr-4">
                 <a href="{{ route('home') }}" class="text-xl font-bold">Hệ thống quản lý công việc</a>
             </div>
             <div class="flex items-center space-x-4">

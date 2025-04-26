@@ -93,7 +93,7 @@
                         </div>
 
                         <div>
-                            <label for="due_date" class="block text-sm font-medium text-gray-700 mb-2">Thời hạn (Due Date) <span class="text-red-500">*</span></label>
+                            <label for="due_date" class="block text-sm font-medium text-gray-700 mb-2">Thời hạn <span class="text-red-500">*</span></label>
                             <input type="date" name="due_date" id="due_date" value="{{ old('due_date') }}" class="block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200" required min="{{ date('Y-m-d') }}">
                         </div>
                     </div>
