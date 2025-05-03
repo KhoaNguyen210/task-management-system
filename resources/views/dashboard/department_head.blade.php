@@ -100,22 +100,18 @@
                             </td>
                             <td class="py-3 px-6 text-center">
                                 <div class="flex item-center justify-center space-x-2">
-                                    <a href="#" {{-- href="{{ route('tasks.show', $task->id) }}" --}} class="text-blue-600 hover:text-blue-900" title="Xem chi tiết">
+                                    <a href="#" class="text-blue-600 hover:text-blue-900" title="Xem chi tiết">
                                          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                     </a>
-                                    <a href="#" {{-- href="{{ route('tasks.evaluate', $task->id) }}" --}} class="text-green-600 hover:text-green-900" title="Đánh giá">
+                                    <a href="#" class="text-green-600 hover:text-green-900" title="Đánh giá">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                     </a>
-                                     <a href="#" {{-- href="{{ route('tasks.edit', $task->id) }}" --}} class="text-yellow-600 hover:text-yellow-900" title="Sửa công việc">
+                                     <a href="#" class="text-yellow-600 hover:text-yellow-900" title="Sửa công việc">
                                          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                                     </a>
-                                     <a href="#" {{-- onclick="confirm('Bạn chắc chắn muốn xóa công việc này?') ? document.getElementById('delete-task-{{ $task->id }}').submit() : ''" --}} class="text-red-600 hover:text-red-900" title="Xóa công việc">
+                                     <a href="#" class="text-red-600 hover:text-red-900" title="Xóa công việc">
                                          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                     </a>
-                                    {{-- <form id="delete-task-{{ $task->id }}" action="{{ route('tasks.destroy', $task->id) }}" method="POST" style="display: none;">
-                                        @csrf
-                                        @method('DELETE')
-                                    </form> --}}
                                 </div>
                             </td>
                         </tr>
@@ -140,7 +136,7 @@
                     </svg>
                     <div>
                         <p class="text-gray-700 font-semibold">Tổng số công việc</p>
-                        <p class="text-3xl font-bold text-blue-600">{{ $tasks->total() }}</p>
+                        <p class="text-3xl font-bold text-blue-600">{{ $totalTasks }}</p>
                     </div>
                 </div>
                 <div class="bg-green-100 p-6 rounded-lg shadow-md flex items-center space-x-4">
@@ -149,7 +145,7 @@
                     </svg>
                     <div>
                         <p class="text-gray-700 font-semibold">Công việc hoàn thành</p>
-                        <p class="text-3xl font-bold text-green-600">0</p>
+                        <p class="text-3xl font-bold text-green-600">{{ $completedTasks }}</p>
                     </div>
                 </div>
                 <div class="bg-yellow-100 p-6 rounded-lg shadow-md flex items-center space-x-4">
@@ -158,7 +154,7 @@
                     </svg>
                     <div>
                         <p class="text-gray-700 font-semibold">Công việc đang thực hiện</p>
-                        <p class="text-3xl font-bold text-yellow-600">0</p>
+                        <p class="text-3xl font-bold text-yellow-600">{{ $inProgressTasks }}</p>
                     </div>
                 </div>
             </div>

@@ -20,8 +20,17 @@ class DashboardController extends Controller
                      ->orderBy('due_date', 'asc')
                      ->paginate(10);
 
-        // Truyền biến $tasks sang view
-        return view('dashboard.department_head', compact('tasks'));
+        // Tính toán thống kê
+        $totalTasks = Task::where('department_id', $departmentId)->count();
+        $completedTasks = Task::where('department_id', $departmentId)
+                              ->where('status', 'Completed')
+                              ->count();
+        $inProgressTasks = Task::where('department_id', $departmentId)
+                               ->where('status', 'In Progress')
+                               ->count();
+
+        // Truyền các biến sang view
+        return view('dashboard.department_head', compact('tasks', 'totalTasks', 'completedTasks', 'inProgressTasks'));
     }
 
     public function lecturerDashboard()
@@ -32,7 +41,6 @@ class DashboardController extends Controller
                          ->orderBy('due_date', 'asc')
                          ->paginate(10);
 
-        // Truyền biến $tasks sang view
         return view('dashboard.lecturer', compact('tasks'));
     }
 

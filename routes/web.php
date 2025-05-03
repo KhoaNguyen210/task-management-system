@@ -16,7 +16,6 @@ Route::middleware('guest')->group(function () {
 // Route đăng xuất (yêu cầu đã đăng nhập)
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 
-
 // --- Authenticated Routes ---
 // Các route yêu cầu người dùng phải đăng nhập
 Route::middleware('auth')->group(function () {
@@ -35,27 +34,32 @@ Route::middleware('auth')->group(function () {
             Route::get('/assign', [TaskController::class, 'assignTasks'])->name('assign');
             Route::post('/assign', [TaskController::class, 'storeTask'])->name('store');
         });
-    });
 
+        // Route cập nhật tiến độ và đề nghị gia hạn (Chỉ cho Lecturer)
+        Route::middleware(['check_auth_role:Lecturer'])->group(function () {
+            Route::get('/{taskId}/update-progress', [TaskController::class, 'showUpdateProgressForm'])->name('update_progress_form');
+            Route::post('/{taskId}/update-progress', [TaskController::class, 'updateProgress'])->name('update_progress');
+            Route::get('/{taskId}/request-extension', [TaskController::class, 'showRequestExtensionForm'])->name('request_extension_form');
+            Route::post('/{taskId}/request-extension', [TaskController::class, 'requestExtension'])->name('request_extension');
+        });
+    });
 
     // --- Default Authenticated Route ---
     // Route gốc '/' sẽ chuyển hướng đến dashboard phù hợp
     Route::get('/', function () {
-        // Kiểm tra xem người dùng đã đăng nhập chưa
         if (!Auth::check()) {
             return redirect()->route('login');
         }
         $user = Auth::user();
-         switch ($user->role) {
+        switch ($user->role) {
             case 'Dean': return redirect()->route('dashboard.dean');
             case 'Department Head': return redirect()->route('dashboard.department_head');
             case 'Lecturer': return redirect()->route('dashboard.lecturer');
             case 'Secretary':
             case 'Educational Staff': return redirect()->route('dashboard.secretary');
             default:
-                Auth::logout(); // Đăng xuất nếu role không hợp lệ
+                Auth::logout();
                 return redirect('/login')->with('error', 'Vai trò không hợp lệ.');
         }
-    })->name('home'); // Đặt tên cho route gốc
-
+    })->name('home');
 });

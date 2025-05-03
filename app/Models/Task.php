@@ -18,6 +18,15 @@ class Task extends Model
         'department_id',
     ];
 
+    protected $attributes = [
+        'status' => 'Not Started',
+    ];
+
+    protected $casts = [
+        'due_date' => 'date',
+        'status' => 'string',
+    ];
+
     public function creatorUser()
     {
         return $this->belongsTo(User::class, 'created_by', 'user_id');
@@ -30,15 +39,16 @@ class Task extends Model
 
     public function assignedUsers()
     {
-        return $this->belongsToMany(User::class, 'task_assignments', 'task_id', 'user_id')
-                    ->withTimestamps();
+        return $this->belongsToMany(User::class, 'task_assignments', 'task_id', 'user_id');
     }
 
-    protected $attributes = [
-        'status' => 'Not Started',
-    ];
+    public function progressUpdates()
+    {
+        return $this->hasMany(TaskProgress::class);
+    }
 
-    protected $casts = [
-        'due_date' => 'date',
-    ];
+    public function extensionRequests()
+    {
+        return $this->hasMany(TaskExtensionRequest::class);
+    }
 }

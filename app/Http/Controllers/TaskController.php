@@ -4,33 +4,30 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Task;
+use App\Models\TaskProgress;
+use App\Models\TaskExtensionRequest;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
+use App\Notifications\TaskExtensionRequested; // Thêm import để sửa lỗi
 
 class TaskController extends Controller
 {
     public function assignTasks()
     {
-        // Lấy department_id của Trưởng bộ môn đang đăng nhập
         $departmentId = Auth::user()->department_id;
-
-        // Lấy danh sách Giảng viên (role: Lecturer) trong cùng bộ môn
         $lecturers = User::where('department_id', $departmentId)
                          ->where('role', 'Lecturer')
                          ->where('user_id', '!=', Auth::id())
                          ->orderBy('name', 'asc')
                          ->get();
-
-        // Trả về view 'tasks.assign' và truyền biến $lecturers sang view
         return view('tasks.assign', compact('lecturers'));
     }
 
     public function storeTask(Request $request)
     {
-        // Validate dữ liệu đầu vào từ form
         $validatedData = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
@@ -39,14 +36,9 @@ class TaskController extends Controller
             'due_date' => 'required|date|after_or_equal:today',
         ]);
 
-        // Bắt đầu transaction
         DB::beginTransaction();
-
         try {
-            // Lấy department_id từ Trưởng bộ môn (người tạo task)
             $departmentId = Auth::user()->department_id;
-
-            // 1. Tạo task mới trong bảng 'tasks'
             $task = Task::create([
                 'title' => $validatedData['title'],
                 'description' => $validatedData['description'],
@@ -55,24 +47,112 @@ class TaskController extends Controller
                 'created_by' => Auth::id(),
                 'department_id' => $departmentId,
             ]);
-
-            // 2. Gán task cho các giảng viên đã chọn
-            // Sử dụng phương thức attach() của quan hệ belongsToMany (assignedUsers)
             $task->assignedUsers()->attach($validatedData['assigned_users']);
-
-            // Nếu tất cả thành công, commit transaction
             DB::commit();
-
-            // Chuyển hướng về trang trước với thông báo thành công
             return redirect()->back()->with('success', 'Phân công công việc thành công!');
-
         } catch (\Exception $e) {
-            // Nếu có lỗi, rollback transaction
             DB::rollBack();
-            // Ghi log lỗi
             Log::error('Error creating task or assigning users: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
-            // Chuyển hướng về trang trước với thông báo lỗi và giữ lại dữ liệu form
             return redirect()->back()->with('error', 'Đã xảy ra lỗi khi phân công công việc. Vui lòng thử lại.')->withInput();
+        }
+    }
+
+    public function showUpdateProgressForm($taskId)
+    {
+        $task = Task::findOrFail($taskId);
+        if (!$task->assignedUsers->contains(Auth::user())) {
+            return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
+        }
+        return view('tasks.update_progress', compact('task'));
+    }
+
+    public function updateProgress(Request $request, $taskId)
+    {
+        $task = Task::findOrFail($taskId);
+        if (!$task->assignedUsers->contains(Auth::user())) {
+            return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
+        }
+
+        $request->validate([
+            'status' => 'required|string|in:Not Started,In Progress,Completed',
+            'comment' => 'nullable|string|max:1000',
+            'attachment' => 'nullable|file|mimes:pdf,doc,docx|max:2048',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $progress = new TaskProgress();
+            $progress->task_id = $taskId;
+            $progress->user_id = Auth::id();
+            $progress->status = $request->status;
+            $progress->comment = $request->comment;
+
+            if ($request->hasFile('attachment')) {
+                $path = $request->file('attachment')->store('attachments', 'public');
+                $progress->attachment = $path;
+            }
+
+            $progress->save();
+            $task->status = $request->status;
+            $task->save();
+
+            DB::commit();
+            return redirect()->route('dashboard.lecturer')->with('success', 'Tiến độ công việc đã được cập nhật thành công.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error updating task progress: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Có lỗi xảy ra khi cập nhật tiến độ. Vui lòng thử lại.')->withInput();
+        }
+    }
+
+    public function showRequestExtensionForm($taskId)
+    {
+        $task = Task::findOrFail($taskId);
+        if (!$task->assignedUsers->contains(Auth::user())) {
+            return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
+        }
+        return view('tasks.request_extension', compact('task'));
+    }
+
+    public function requestExtension(Request $request, $taskId)
+    {
+        $task = Task::findOrFail($taskId);
+        if (!$task->assignedUsers->contains(Auth::user())) {
+            return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
+        }
+
+        if ($task->extensionRequests()->where('status', 'Pending')->exists()) {
+            return redirect()->back()->with('error', 'Công việc này đã có yêu cầu gia hạn đang chờ duyệt.');
+        }
+
+        $request->validate([
+            'reason' => 'required|string|max:1000',
+            'new_due_date' => 'required|date|after:today',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $extensionRequest = new TaskExtensionRequest();
+            $extensionRequest->task_id = $taskId;
+            $extensionRequest->user_id = Auth::id();
+            $extensionRequest->reason = $request->reason;
+            $extensionRequest->new_due_date = $request->new_due_date;
+            $extensionRequest->status = 'Pending';
+            $extensionRequest->save();
+
+            $departmentHead = User::where('role', 'Department Head')
+                                 ->where('department_id', $task->department_id)
+                                 ->first();
+            if ($departmentHead) {
+                $departmentHead->notify(new TaskExtensionRequested($extensionRequest));
+            }
+
+            DB::commit();
+            return redirect()->route('dashboard.lecturer')->with('success', 'Yêu cầu gia hạn đã được gửi thành công.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error requesting task extension: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Có lỗi xảy ra khi gửi yêu cầu gia hạn. Vui lòng thử lại.')->withInput();
         }
     }
 }
