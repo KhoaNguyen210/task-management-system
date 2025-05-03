@@ -57,6 +57,37 @@ class TaskController extends Controller
         }
     }
 
+    public function show($taskId)
+    {
+        $user = Auth::user();
+        $routeName = match ($user->role) {
+            'Department Head' => 'dashboard.department_head',
+            'Lecturer' => 'dashboard.lecturer',
+            'Dean' => 'dashboard.dean',
+            default => 'home',
+        };
+        try {
+            $task = Task::with(['creatorUser', 'assignedUsers', 'department', 'progressUpdates.user', 'extensionRequests.user'])
+                        ->findOrFail($taskId);
+    
+            $isAssignedLecturer = $user->role === 'Lecturer' && $task->assignedUsers->contains($user);
+
+            $isDepartmentHeadOfTask = $user->role === 'Department Head' && $user->department_id === $task->department_id;
+    
+            if ($isAssignedLecturer || $isDepartmentHeadOfTask) {
+                return view('tasks.show', compact('task'));
+            } else {
+                return redirect()->route($routeName)->with('error', 'Bạn không có quyền xem chi tiết công việc này.');
+            }
+    
+        } catch (ModelNotFoundException $e) {
+            return redirect()->route($routeName)->with('error', 'Không tìm thấy công việc yêu cầu.');
+        } catch (\Exception $e) {
+             Log::error('Error showing task details: ' . $e->getMessage());
+             return redirect()->route($routeName)->with('error', 'Đã xảy ra lỗi khi xem chi tiết công việc.');
+        }
+    }
+
     public function showUpdateProgressForm($taskId)
     {
         $task = Task::findOrFail($taskId);

@@ -42,6 +42,9 @@ Route::middleware('auth')->group(function () {
             Route::get('/{taskId}/request-extension', [TaskController::class, 'showRequestExtensionForm'])->name('request_extension_form');
             Route::post('/{taskId}/request-extension', [TaskController::class, 'requestExtension'])->name('request_extension');
         });
+
+        // Route xem chi tiết công việc (Chung cho Head và Lecturer)
+        Route::get('/{taskId}/show', [TaskController::class, 'show'])->name('show');
     });
 
     // --- Default Authenticated Route ---
