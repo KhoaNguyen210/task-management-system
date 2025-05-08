@@ -16,6 +16,9 @@ class Task extends Model
         'status',
         'created_by',
         'department_id',
+        'evaluation_level', // Thêm cho UC-08
+        'evaluation_comment', // Thêm cho UC-08
+        'evaluated_by', // Thêm cho UC-08
     ];
 
     protected $attributes = [
@@ -50,5 +53,10 @@ class Task extends Model
     public function extensionRequests()
     {
         return $this->hasMany(TaskExtensionRequest::class);
+    }
+
+    public function evaluator()
+    {
+        return $this->belongsTo(User::class, 'evaluated_by', 'user_id');
     }
 }

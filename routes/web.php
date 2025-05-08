@@ -45,6 +45,14 @@ Route::middleware('auth')->group(function () {
 
         // Route xem chi tiết công việc (Chung cho Head và Lecturer)
         Route::get('/{taskId}/show', [TaskController::class, 'show'])->name('show');
+
+        // Route đánh giá công việc (Chỉ cho Department Head)
+        Route::middleware(['check_auth_role:Department Head'])->group(function () {
+            Route::get('/{taskId}/evaluate', [TaskController::class, 'showEvaluationForm'])->name('evaluate_form');
+            Route::post('/{taskId}/evaluate', [TaskController::class, 'evaluateTask'])->name('evaluate');
+            // Route xóa công việc
+            Route::delete('/{taskId}', [TaskController::class, 'destroy'])->name('destroy');
+        });
     });
 
     // --- Default Authenticated Route ---

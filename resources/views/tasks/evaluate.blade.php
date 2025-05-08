@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chi tiết công việc: {{ $task->title }}</title>
+    <title>Đánh giá công việc: {{ $task->title }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-gray-100 font-sans">
@@ -27,21 +27,24 @@
 
     <div class="container mx-auto mt-8 px-4 pb-16">
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-3xl font-bold text-gray-800">Chi tiết công việc</h2>
-            @php
-                $backRoute = match(Auth::user()->role) {
-                    'Department Head' => route('dashboard.department_head'),
-                    'Lecturer' => route('dashboard.lecturer'),
-                    default => route('home')
-                };
-            @endphp
-            <a href="{{ $backRoute }}" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition duration-200">
+            <h2 class="text-3xl font-bold text-gray-800">Đánh giá công việc: {{ $task->title }}</h2>
+            <a href="{{ route('dashboard.department_head') }}" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition duration-200">
                 ← Quay lại Dashboard
             </a>
         </div>
 
+        @if (session('error'))
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                <strong class="font-bold">Lỗi!</strong>
+                <span class="block sm:inline">{{ session('error') }}</span>
+                 <span class="absolute top-0 bottom-0 right-0 px-4 py-3">
+                    <svg onclick="this.parentElement.style.display='none';" class="fill-current h-6 w-6 text-red-500 cursor-pointer" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Đóng</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
+                </span>
+            </div>
+        @endif
+
         <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h3 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">{{ $task->title }}</h3>
+            <h3 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Thông tin công việc</h3>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -88,48 +91,6 @@
                             {{ $task->status }}
                         </span>
                     </p>
-
-                    @if($task->evaluation_level)
-                        <p class="mb-4"><strong class="font-medium text-gray-800">Mức độ hoàn thành:</strong>
-                            <span class="py-1 px-3 rounded-full text-sm font-semibold
-                                @switch($task->evaluation_level)
-                                    @case('Không hoàn thành') bg-red-200 text-red-600 @break
-                                    @case('Hoàn thành yếu') bg-orange-200 text-orange-600 @break
-                                    @case('Hoàn thành') bg-yellow-200 text-yellow-600 @break
-                                    @case('Hoàn thành tích cực') bg-green-200 text-green-600 @break
-                                    @case('Hoàn thành tốt') bg-blue-200 text-blue-600 @break
-                                    @case('Hoàn thành xuất sắc') bg-purple-200 text-purple-600 @break
-                                    @default bg-gray-200 text-gray-600
-                                @endswitch">
-                                {{ $task->evaluation_level }}
-                            </span>
-                        </p>
-                        @if($task->evaluation_comment)
-                            <p class="mb-4"><strong class="font-medium text-gray-800">Nhận xét:</strong> {{ $task->evaluation_comment }}</p>
-                        @endif
-                        <p class="mb-4"><strong class="font-medium text-gray-800">Người đánh giá:</strong> {{ $task->evaluator->name ?? 'N/A' }} (vào {{ $task->updated_at->format('d/m/Y H:i') }})</p>
-                    @endif
-
-                    @if(Auth::user()->role === 'Lecturer' && $task->assignedUsers->contains(Auth::user()))
-                        <div class="flex space-x-2 mt-4">
-                             <a href="{{ route('tasks.update_progress_form', $task->id) }}" class="bg-yellow-500 text-white py-2 px-4 rounded-lg hover:bg-yellow-600 transition duration-200 text-sm">Cập nhật tiến độ</a>
-                             <a href="{{ route('tasks.request_extension_form', $task->id) }}" class="bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition duration-200 text-sm">Đề nghị gia hạn</a>
-                        </div>
-                    @endif
-                     @if(Auth::user()->role === 'Department Head' && Auth::user()->department_id === $task->department_id)
-                         <div class="flex space-x-2 mt-4">
-                            @if($task->status === 'Completed' && !$task->evaluation_level)
-                                <a href="{{ route('tasks.evaluate_form', $task->id) }}" class="bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition duration-200 text-sm">Đánh giá</a>
-                            @endif
-                            <a href="#" class="bg-indigo-500 text-white py-2 px-4 rounded-lg hover:bg-indigo-600 transition duration-200 text-sm">Sửa công việc</a>
-                            <form action="{{ route('tasks.destroy', $task->id) }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn xóa công việc này?');" style="display: inline;">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition duration-200 text-sm">Xóa công việc</button>
-                            </form>
-                         </div>
-                    @endif
-
                 </div>
             </div>
         </div>
@@ -157,34 +118,42 @@
             @endif
         </div>
 
-        <div class="bg-white rounded-lg shadow-lg p-6">
-             <h4 class="text-xl font-semibold text-gray-700 mb-3">Lịch sử Đề nghị Gia hạn</h4>
-             @if($task->extensionRequests->isNotEmpty())
-                 <ul class="space-y-3">
-                     @foreach($task->extensionRequests->sortByDesc('created_at') as $extension)
-                         <li class="border-b pb-3 last:border-b-0">
-                             <p><strong class="font-medium">{{ $extension->user->name ?? 'N/A' }}</strong> đã yêu cầu gia hạn đến <strong class="text-red-600">{{ $extension->new_due_date->format('d/m/Y') }}</strong> vào lúc {{ $extension->created_at->format('d/m/Y H:i') }}</p>
-                             <p class="text-gray-600 mt-1 pl-4">Lý do: <span class="italic">"{{ $extension->reason }}"</span></p>
-                             <p class="mt-1 pl-4">Trạng thái:
-                                <span class="font-semibold
-                                     @if($extension->status == 'Pending') text-yellow-600
-                                     @elseif($extension->status == 'Approved') text-green-600
-                                     @elseif($extension->status == 'Rejected') text-red-600
-                                     @endif">
-                                     {{ $extension->status }}
-                                 </span>
-                                 @if($extension->approved_by)
-                                      (bởi {{ $extension->approver->name ?? 'N/A' }} vào {{ $extension->updated_at->format('d/m/Y H:i') }})
-                                 @endif
-                             </p>
-                         </li>
-                     @endforeach
-                 </ul>
-             @else
-                 <p class="text-gray-500 italic">Chưa có yêu cầu gia hạn nào.</p>
-             @endif
-         </div>
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 class="text-2xl font-semibold text-gray-700 mb-4">Đánh giá công việc</h3>
 
+            <form action="{{ route('tasks.evaluate', $task->id) }}" method="POST">
+                @csrf
+
+                <div class="mb-4">
+                    <label for="evaluation_level" class="block text-gray-700 font-medium mb-2">Mức độ hoàn thành:</label>
+                    <select name="evaluation_level" id="evaluation_level" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="" {{ old('evaluation_level') ? '' : 'selected' }} disabled>Chọn mức độ hoàn thành</option>
+                        <option value="Không hoàn thành" {{ old('evaluation_level') === 'Không hoàn thành' ? 'selected' : '' }}>Không hoàn thành</option>
+                        <option value="Hoàn thành yếu" {{ old('evaluation_level') === 'Hoàn thành yếu' ? 'selected' : '' }}>Hoàn thành yếu</option>
+                        <option value="Hoàn thành" {{ old('evaluation_level') === 'Hoàn thành' ? 'selected' : '' }}>Hoàn thành</option>
+                        <option value="Hoàn thành tích cực" {{ old('evaluation_level') === 'Hoàn thành tích cực' ? 'selected' : '' }}>Hoàn thành tích cực</option>
+                        <option value="Hoàn thành tốt" {{ old('evaluation_level') === 'Hoàn thành tốt' ? 'selected' : '' }}>Hoàn thành tốt</option>
+                        <option value="Hoàn thành xuất sắc" {{ old('evaluation_level') === 'Hoàn thành xuất sắc' ? 'selected' : '' }}>Hoàn thành xuất sắc</option>
+                    </select>
+                    @error('evaluation_level')
+                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="mb-4">
+                    <label for="evaluation_comment" class="block text-gray-700 font-medium mb-2">Nhận xét (tùy chọn):</label>
+                    <textarea name="evaluation_comment" id="evaluation_comment" rows="4" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">{{ old('evaluation_comment') }}</textarea>
+                    @error('evaluation_comment')
+                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="flex space-x-2">
+                    <button type="submit" class="bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition duration-200">Lưu đánh giá</button>
+                    <a href="{{ route('dashboard.department_head') }}" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition duration-200">Hủy</a>
+                </div>
+            </form>
+        </div>
     </div>
 </body>
 </html>

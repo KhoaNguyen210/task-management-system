@@ -22,8 +22,9 @@ class DashboardController extends Controller
 
         // Tính toán thống kê
         $totalTasks = Task::where('department_id', $departmentId)->count();
+        // Đếm cả công việc có trạng thái Completed và Evaluated
         $completedTasks = Task::where('department_id', $departmentId)
-                              ->where('status', 'Completed')
+                              ->whereIn('status', ['Completed', 'Evaluated'])
                               ->count();
         $inProgressTasks = Task::where('department_id', $departmentId)
                                ->where('status', 'In Progress')

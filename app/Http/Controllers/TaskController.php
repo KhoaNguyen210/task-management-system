@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use App\Notifications\TaskExtensionRequested; // Thêm import để sửa lỗi
+use App\Notifications\TaskExtensionRequested;
+use App\Notifications\TaskEvaluated;
 
 class TaskController extends Controller
 {
@@ -67,10 +68,10 @@ class TaskController extends Controller
             default => 'home',
         };
         try {
-            $task = Task::with(['creatorUser', 'assignedUsers', 'department', 'progressUpdates.user', 'extensionRequests.user'])
+            $task = Task::with(['creatorUser', 'assignedUsers', 'department', 'progressUpdates.user', 'extensionRequests.user', 'evaluator'])
                         ->findOrFail($taskId);
     
-            $isAssignedLecturer = $user->role === 'Lecturer' && $task->assignedUsers->contains($user);
+            $isAssignedLecturer = $user->role === 'Lecturer' && $task->assignedUsers->contains($user->user_id);
 
             $isDepartmentHeadOfTask = $user->role === 'Department Head' && $user->department_id === $task->department_id;
     
@@ -91,7 +92,7 @@ class TaskController extends Controller
     public function showUpdateProgressForm($taskId)
     {
         $task = Task::findOrFail($taskId);
-        if (!$task->assignedUsers->contains(Auth::user())) {
+        if (!$task->assignedUsers->contains(Auth::id())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
         return view('tasks.update_progress', compact('task'));
@@ -100,7 +101,7 @@ class TaskController extends Controller
     public function updateProgress(Request $request, $taskId)
     {
         $task = Task::findOrFail($taskId);
-        if (!$task->assignedUsers->contains(Auth::user())) {
+        if (!$task->assignedUsers->contains(Auth::id())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
 
@@ -139,7 +140,7 @@ class TaskController extends Controller
     public function showRequestExtensionForm($taskId)
     {
         $task = Task::findOrFail($taskId);
-        if (!$task->assignedUsers->contains(Auth::user())) {
+        if (!$task->assignedUsers->contains(Auth::id())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
         return view('tasks.request_extension', compact('task'));
@@ -148,7 +149,7 @@ class TaskController extends Controller
     public function requestExtension(Request $request, $taskId)
     {
         $task = Task::findOrFail($taskId);
-        if (!$task->assignedUsers->contains(Auth::user())) {
+        if (!$task->assignedUsers->contains(Auth::id())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
 
@@ -184,6 +185,110 @@ class TaskController extends Controller
             DB::rollBack();
             Log::error('Error requesting task extension: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Có lỗi xảy ra khi gửi yêu cầu gia hạn. Vui lòng thử lại.')->withInput();
+        }
+    }
+
+    public function showEvaluationForm($taskId)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'Department Head') {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền đánh giá công việc.');
+        }
+
+        $task = Task::with(['creatorUser', 'assignedUsers', 'department', 'progressUpdates.user'])
+                    ->findOrFail($taskId);
+
+        if ($user->department_id !== $task->department_id) {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền đánh giá công việc này.');
+        }
+
+        if ($task->status !== 'Completed' || $task->evaluation_level) {
+            return redirect()->route('dashboard.department_head')->with('error', 'Công việc này không thể được đánh giá.');
+        }
+
+        return view('tasks.evaluate', compact('task'));
+    }
+
+    public function evaluateTask(Request $request, $taskId)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'Department Head') {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền đánh giá công việc.');
+        }
+
+        $task = Task::with(['assignedUsers'])->findOrFail($taskId);
+
+        if ($user->department_id !== $task->department_id) {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền đánh giá công việc này.');
+        }
+
+        // Kiểm tra trạng thái công việc trước khi đánh giá
+        if ($task->status !== 'Completed' || $task->evaluation_level) {
+            Log::warning('Task ID: ' . $taskId . ' cannot be evaluated. Status: ' . $task->status . ', Evaluation Level: ' . $task->evaluation_level);
+            return redirect()->route('dashboard.department_head')->with('error', 'Công việc này không thể được đánh giá.');
+        }
+
+        $request->validate([
+            'evaluation_level' => 'required|in:Không hoàn thành,Hoàn thành yếu,Hoàn thành,Hoàn thành tích cực,Hoàn thành tốt,Hoàn thành xuất sắc',
+            'evaluation_comment' => 'nullable|string|max:1000',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            Log::info('Evaluating task ID: ' . $taskId . ' by user: ', [
+                'user_id' => $user->user_id,
+                'username' => $user->name,
+                'role' => $user->role,
+            ]);
+
+            $task->evaluation_level = $request->evaluation_level;
+            $task->evaluation_comment = $request->evaluation_comment;
+            $task->evaluated_by = $user->user_id;
+            $task->status = 'Evaluated';
+            $task->save();
+
+            Log::info('Task ID: ' . $taskId . ' evaluated successfully with evaluated_by: ' . $task->evaluated_by);
+
+            foreach ($task->assignedUsers as $assignee) {
+                $assignee->notify(new TaskEvaluated($task));
+            }
+
+            DB::commit();
+            // Redirect với thông báo thành công, không cho phép đánh giá lại
+            return redirect()->route('dashboard.department_head')->with('success', 'Đánh giá đã được lưu thành công.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error evaluating task: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Có lỗi xảy ra khi lưu đánh giá. Vui lòng thử lại.')->withInput();
+        }
+    }
+
+    public function destroy($taskId)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'Department Head') {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xóa công việc.');
+        }
+
+        $task = Task::findOrFail($taskId);
+
+        if ($user->department_id !== $task->department_id) {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xóa công việc này.');
+        }
+
+        DB::beginTransaction();
+        try {
+            $task->assignedUsers()->detach();
+            TaskProgress::where('task_id', $task->id)->delete();
+            TaskExtensionRequest::where('task_id', $task->id)->delete();
+            $task->delete();
+
+            DB::commit();
+            return redirect()->route('dashboard.department_head')->with('success', 'Công việc đã được xóa thành công.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error deleting task: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Có lỗi xảy ra khi xóa công việc. Vui lòng thử lại.');
         }
     }
 }
