@@ -29,7 +29,7 @@
         <div class="container mx-auto mt-8 px-4 pb-16">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-3xl font-bold text-gray-800">Phân công công việc</h2>
-                <a href="{{ route('dashboard.department_head') }}" class="text-blue-600 hover:underline">&larr; Quay lại Dashboard</a>
+                <a href="{{ route('dashboard.department_head') }}" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition duration-200">&larr; Quay lại Dashboard</a>
             </div>
 
             @if (session('success'))

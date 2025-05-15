@@ -28,7 +28,10 @@
     <div class="container mx-auto mt-8 px-4 pb-16">
         <div class="flex justify-between items-center mb-8">
             <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Dashboard Trưởng Bộ môn</h2>
-            <a href="{{ route('tasks.assign') }}" class="bg-blue-600 text-white py-2 px-4 md:py-3 md:px-6 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md transform hover:scale-105 text-sm md:text-base">Phân công công việc</a>
+            <div class="flex space-x-4">
+                <a href="{{ route('tasks.assign') }}" class="bg-blue-600 text-white py-2 px-4 md:py-3 md:px-6 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md transform hover:scale-105 text-sm md:text-base">Phân công công việc</a>
+                <a href="{{ route('tasks.extension_requests') }}" class="bg-yellow-600 text-white py-2 px-4 md:py-3 md:px-6 rounded-lg hover:bg-yellow-700 transition duration-200 shadow-md transform hover:scale-105 text-sm md:text-base">Xem các yêu cầu gia hạn</a>
+            </div>
         </div>
 
         @if (session('success'))

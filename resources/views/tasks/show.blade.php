@@ -177,6 +177,9 @@
                                       (bởi {{ $extension->approver->name ?? 'N/A' }} vào {{ $extension->updated_at->format('d/m/Y H:i') }})
                                  @endif
                              </p>
+                             @if($extension->comment)
+                                 <p class="text-gray-600 mt-1 pl-4">Nhận xét: <span class="italic">"{{ $extension->comment }}"</span></p>
+                             @endif
                          </li>
                      @endforeach
                  </ul>

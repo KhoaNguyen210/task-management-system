@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Notifications\TaskExtensionRequested;
+use App\Notifications\TaskExtensionDecision;
 use App\Notifications\TaskEvaluated;
 
 class TaskController extends Controller
@@ -68,7 +69,7 @@ class TaskController extends Controller
             default => 'home',
         };
         try {
-            $task = Task::with(['creatorUser', 'assignedUsers', 'department', 'progressUpdates.user', 'extensionRequests.user', 'evaluator'])
+            $task = Task::with(['creatorUser', 'assignedUsers', 'department', 'progressUpdates.user', 'extensionRequests.user', 'extensionRequests.approver', 'evaluator'])
                         ->findOrFail($taskId);
     
             $isAssignedLecturer = $user->role === 'Lecturer' && $task->assignedUsers->contains($user->user_id);
@@ -140,7 +141,7 @@ class TaskController extends Controller
     public function showRequestExtensionForm($taskId)
     {
         $task = Task::findOrFail($taskId);
-        if (!$task->assignedUsers->contains(Auth::id())) {
+        if (!$task->assignedUsers->contains(Auth::user())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
         return view('tasks.request_extension', compact('task'));
@@ -149,7 +150,7 @@ class TaskController extends Controller
     public function requestExtension(Request $request, $taskId)
     {
         $task = Task::findOrFail($taskId);
-        if (!$task->assignedUsers->contains(Auth::id())) {
+        if (!$task->assignedUsers->contains(Auth::user())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
 
@@ -222,7 +223,6 @@ class TaskController extends Controller
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền đánh giá công việc này.');
         }
 
-        // Kiểm tra trạng thái công việc trước khi đánh giá
         if ($task->status !== 'Completed' || $task->evaluation_level) {
             Log::warning('Task ID: ' . $taskId . ' cannot be evaluated. Status: ' . $task->status . ', Evaluation Level: ' . $task->evaluation_level);
             return redirect()->route('dashboard.department_head')->with('error', 'Công việc này không thể được đánh giá.');
@@ -254,12 +254,102 @@ class TaskController extends Controller
             }
 
             DB::commit();
-            // Redirect với thông báo thành công, không cho phép đánh giá lại
             return redirect()->route('dashboard.department_head')->with('success', 'Đánh giá đã được lưu thành công.');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error evaluating task: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Có lỗi xảy ra khi lưu đánh giá. Vui lòng thử lại.')->withInput();
+        }
+    }
+
+    // Hiển thị danh sách yêu cầu gia hạn (FR-46)
+    public function listExtensionRequests()
+    {
+        $user = Auth::user();
+        if ($user->role !== 'Department Head') {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xem danh sách yêu cầu gia hạn.');
+        }
+
+        $extensionRequests = TaskExtensionRequest::whereHas('task', function ($query) use ($user) {
+            $query->where('department_id', $user->department_id);
+        })
+        ->where('status', 'Pending')
+        ->with(['task', 'user'])
+        ->orderBy('created_at', 'desc')
+        ->paginate(10);
+
+        return view('tasks.extension_requests', compact('extensionRequests'));
+    }
+
+    // Hiển thị chi tiết yêu cầu gia hạn và form phê duyệt/từ chối (FR-47)
+    public function showExtensionRequest($requestId)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'Department Head') {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xem chi tiết yêu cầu gia hạn.');
+        }
+
+        $extensionRequest = TaskExtensionRequest::with(['task', 'user'])
+                                                ->findOrFail($requestId);
+
+        if ($extensionRequest->task->department_id !== $user->department_id) {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xem chi tiết yêu cầu này.');
+        }
+
+        if ($extensionRequest->status !== 'Pending') {
+            return redirect()->route('tasks.extension_requests')->with('error', 'Yêu cầu này đã được xử lý.');
+        }
+
+        return view('tasks.approve_extension', compact('extensionRequest'));
+    }
+
+    // Xử lý phê duyệt/từ chối yêu cầu gia hạn (FR-48 đến FR-53)
+    public function approveExtensionRequest(Request $request, $requestId)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'Department Head') {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xử lý yêu cầu gia hạn.');
+        }
+
+        $extensionRequest = TaskExtensionRequest::with(['task', 'user'])
+                                                ->findOrFail($requestId);
+
+        if ($extensionRequest->task->department_id !== $user->department_id) {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xử lý yêu cầu này.');
+        }
+
+        if ($extensionRequest->status !== 'Pending') {
+            return redirect()->route('tasks.extension_requests')->with('error', 'Yêu cầu này đã được xử lý.');
+        }
+
+        $request->validate([
+            'decision' => 'required|in:approved,rejected',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $decision = $request->decision;
+            $extensionRequest->status = $decision === 'approved' ? 'Approved' : 'Rejected';
+            $extensionRequest->approved_by = $user->user_id;
+            $extensionRequest->comment = $request->comment;
+            $extensionRequest->save();
+
+            if ($decision === 'approved') {
+                $task = $extensionRequest->task;
+                $task->due_date = $extensionRequest->new_due_date;
+                $task->save();
+            }
+
+            $extensionRequest->user->notify(new TaskExtensionDecision($extensionRequest, $decision));
+
+            DB::commit();
+            $message = $decision === 'approved' ? 'Yêu cầu gia hạn đã được phê duyệt.' : 'Yêu cầu gia hạn đã bị từ chối.';
+            return redirect()->route('tasks.extension_requests')->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error processing extension request: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Có lỗi xảy ra khi xử lý yêu cầu. Vui lòng thử lại.')->withInput();
         }
     }
 

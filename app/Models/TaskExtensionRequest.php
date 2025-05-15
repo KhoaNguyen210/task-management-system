@@ -16,10 +16,11 @@ class TaskExtensionRequest extends Model
         'new_due_date',
         'status',
         'approved_by',
+        'comment', // Thêm cột mới
     ];
 
     protected $casts = [
-        'new_due_date' => 'date', // Thêm dòng này để chuyển đổi new_due_date thành Carbon
+        'new_due_date' => 'date',
     ];
 
     public function task()

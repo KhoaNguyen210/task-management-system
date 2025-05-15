@@ -46,12 +46,15 @@ Route::middleware('auth')->group(function () {
         // Route xem chi tiết công việc (Chung cho Head và Lecturer)
         Route::get('/{taskId}/show', [TaskController::class, 'show'])->name('show');
 
-        // Route đánh giá công việc (Chỉ cho Department Head)
+        // Route đánh giá công việc, xử lý yêu cầu gia hạn và xóa công việc (Chỉ cho Department Head)
         Route::middleware(['check_auth_role:Department Head'])->group(function () {
             Route::get('/{taskId}/evaluate', [TaskController::class, 'showEvaluationForm'])->name('evaluate_form');
             Route::post('/{taskId}/evaluate', [TaskController::class, 'evaluateTask'])->name('evaluate');
-            // Route xóa công việc
             Route::delete('/{taskId}', [TaskController::class, 'destroy'])->name('destroy');
+            // Route xử lý yêu cầu gia hạn (UC-07)
+            Route::get('/extension-requests', [TaskController::class, 'listExtensionRequests'])->name('extension_requests');
+            Route::get('/extension-request/{requestId}', [TaskController::class, 'showExtensionRequest'])->name('extension_request.show');
+            Route::post('/extension-request/{requestId}/approve', [TaskController::class, 'approveExtensionRequest'])->name('extension_request.approve');
         });
     });
 
