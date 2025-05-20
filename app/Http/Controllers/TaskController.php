@@ -73,7 +73,6 @@ class TaskController extends Controller
                         ->findOrFail($taskId);
     
             $isAssignedLecturer = $user->role === 'Lecturer' && $task->assignedUsers->contains($user->user_id);
-
             $isDepartmentHeadOfTask = $user->role === 'Department Head' && $user->department_id === $task->department_id;
     
             if ($isAssignedLecturer || $isDepartmentHeadOfTask) {
@@ -82,11 +81,9 @@ class TaskController extends Controller
                 return redirect()->route($routeName)->with('error', 'Bạn không có quyền xem chi tiết công việc này.');
             }
     
-        } catch (ModelNotFoundException $e) {
-            return redirect()->route($routeName)->with('error', 'Không tìm thấy công việc yêu cầu.');
         } catch (\Exception $e) {
-             Log::error('Error showing task details: ' . $e->getMessage());
-             return redirect()->route($routeName)->with('error', 'Đã xảy ra lỗi khi xem chi tiết công việc.');
+            Log::error('Error showing task details: ' . $e->getMessage());
+            return redirect()->route($routeName)->with('error', 'Đã xảy ra lỗi khi xem chi tiết công việc.');
         }
     }
 
@@ -379,6 +376,93 @@ class TaskController extends Controller
             DB::rollBack();
             Log::error('Error deleting task: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Có lỗi xảy ra khi xóa công việc. Vui lòng thử lại.');
+        }
+    }
+
+    // Hiển thị form tìm kiếm công việc (FR-84, FR-85)
+    public function searchForm()
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['Dean', 'Department Head'])) {
+            return redirect()->route('home')->with('error', 'Bạn không có quyền truy cập chức năng tìm kiếm.');
+        }
+
+        // Lấy danh sách giảng viên cho select box
+        $lecturers = User::where('role', 'Lecturer')
+                        ->when($user->role === 'Department Head', function ($query) use ($user) {
+                            $query->where('department_id', $user->department_id);
+                        })
+                        ->orderBy('name', 'asc')
+                        ->get();
+
+        // Truyền biến $tasks mặc định là collection rỗng
+        $tasks = collect([]);
+
+        return view('tasks.search', compact('lecturers', 'tasks'));
+    }
+
+    // Xử lý tìm kiếm công việc (FR-86, FR-87, FR-88, FR-89, FR-90, FR-91)
+    public function search(Request $request)
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['Dean', 'Department Head'])) {
+            return redirect()->route('home')->with('error', 'Bạn không có quyền truy cập chức năng tìm kiếm.');
+        }
+
+        $request->validate([
+            'due_date_from' => 'nullable|date',
+            'due_date_to' => 'nullable|date|after_or_equal:due_date_from',
+            'assignee' => 'nullable|exists:users,user_id',
+            'keyword' => 'nullable|string|max:255',
+        ]);
+
+        try {
+            $query = Task::with(['assignedUsers', 'department'])
+                        ->when($user->role === 'Department Head', function ($query) use ($user) {
+                            $query->where('department_id', $user->department_id);
+                        });
+
+            // Lọc theo khoảng thời gian đến hạn
+            if ($request->filled('due_date_from')) {
+                $query->whereDate('due_date', '>=', $request->due_date_from);
+            }
+            if ($request->filled('due_date_to')) {
+                $query->whereDate('due_date', '<=', $request->due_date_to);
+            }
+
+            // Lọc theo giảng viên được giao
+            if ($request->filled('assignee')) {
+                $query->whereHas('assignedUsers', function ($q) use ($request) {
+                    $q->where('task_assignments.user_id', $request->assignee);
+                });
+            }
+
+            // Lọc theo từ khóa trong tiêu đề
+            if ($request->filled('keyword')) {
+                $query->where('title', 'like', '%' . $request->keyword . '%');
+            }
+
+            // Lấy danh sách công việc, phân trang 10 công việc mỗi trang
+            $tasks = $query->orderBy('due_date', 'asc')->paginate(10);
+
+            // Lấy lại danh sách giảng viên để hiển thị trong form
+            $lecturers = User::where('role', 'Lecturer')
+                            ->when($user->role === 'Department Head', function ($query) use ($user) {
+                                $query->where('department_id', $user->department_id);
+                            })
+                            ->orderBy('name', 'asc')
+                            ->get();
+
+            // Nếu không có kết quả
+            if ($tasks->isEmpty() && $request->filled(['due_date_from', 'due_date_to', 'assignee', 'keyword'])) {
+                return view('tasks.search', compact('tasks', 'lecturers'))
+                    ->with('error', 'Không tìm thấy công việc phù hợp.');
+            }
+
+            return view('tasks.search', compact('tasks', 'lecturers'));
+        } catch (\Exception $e) {
+            Log::error('Error searching tasks: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại sau.');
         }
     }
 }

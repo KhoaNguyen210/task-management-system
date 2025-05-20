@@ -78,7 +78,7 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    'locale' => 'vi', // Đổi từ env('APP_LOCALE', 'en') thành 'vi'
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 

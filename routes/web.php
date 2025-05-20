@@ -56,6 +56,12 @@ Route::middleware('auth')->group(function () {
             Route::get('/extension-request/{requestId}', [TaskController::class, 'showExtensionRequest'])->name('extension_request.show');
             Route::post('/extension-request/{requestId}/approve', [TaskController::class, 'approveExtensionRequest'])->name('extension_request.approve');
         });
+
+        // Route tìm kiếm công việc (Chỉ cho Dean và Department Head)
+        Route::middleware(['check_auth_role:Dean,Department Head'])->group(function () {
+            Route::get('/search', [TaskController::class, 'searchForm'])->name('search_form');
+            Route::post('/search', [TaskController::class, 'search'])->name('search');
+        });
     });
 
     // --- Default Authenticated Route ---

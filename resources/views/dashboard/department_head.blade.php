@@ -31,6 +31,7 @@
             <div class="flex space-x-4">
                 <a href="{{ route('tasks.assign') }}" class="bg-blue-600 text-white py-2 px-4 md:py-3 md:px-6 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md transform hover:scale-105 text-sm md:text-base">Phân công công việc</a>
                 <a href="{{ route('tasks.extension_requests') }}" class="bg-yellow-600 text-white py-2 px-4 md:py-3 md:px-6 rounded-lg hover:bg-yellow-700 transition duration-200 shadow-md transform hover:scale-105 text-sm md:text-base">Xem các yêu cầu gia hạn</a>
+                <a href="{{ route('tasks.search_form') }}" class="bg-green-600 text-white py-2 px-4 md:py-3 md:px-6 rounded-lg hover:bg-green-700 transition duration-200 shadow-md transform hover:scale-105 text-sm md:text-base">Tìm kiếm Công việc</a>
             </div>
         </div>
 
