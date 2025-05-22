@@ -7,6 +7,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-gray-100 font-sans">
+    <!-- Navigation bar -->
     <nav class="bg-blue-800 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">
             <div class="flex items-center">
@@ -25,7 +26,9 @@
         </div>
     </nav>
 
+    <!-- Main content -->
     <div class="container mx-auto mt-8 px-4 pb-16">
+        <!-- Page title and back link -->
         <div class="flex justify-between items-center mb-8">
             <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Tìm kiếm Công việc</h2>
             <a href="{{ Auth::user()->role === 'Dean' ? route('dashboard.dean') : route('dashboard.department_head') }}"
@@ -34,19 +37,23 @@
             </a>
         </div>
 
-        <!-- Thông báo -->
+        <!-- Success message -->
         @if (session('success'))
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
                 <strong class="font-bold">Thành công!</strong>
                 <span class="block sm:inline">{{ session('success') }}</span>
             </div>
         @endif
+
+        <!-- Error message -->
         @if (session('error'))
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
                 <strong class="font-bold">Lỗi!</strong>
                 <span class="block sm:inline">{{ session('error') }}</span>
             </div>
         @endif
+
+        <!-- Validation errors -->
         @if ($errors->any())
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
                 <strong class="font-bold">Lỗi!</strong>
@@ -58,7 +65,7 @@
             </div>
         @endif
 
-        <!-- Form tìm kiếm -->
+        <!-- Search form -->
         <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h3 class="text-xl md:text-2xl font-semibold text-gray-700 mb-4">Tìm kiếm Công việc</h3>
             <form action="{{ route('tasks.search') }}" method="POST">
@@ -98,7 +105,7 @@
             </form>
         </div>
 
-        <!-- Kết quả tìm kiếm -->
+        <!-- Search results -->
         <div class="bg-white rounded-lg shadow-lg p-6 overflow-x-auto">
             <h3 class="text-xl md:text-2xl font-semibold text-gray-700 mb-4">Kết quả Tìm kiếm</h3>
             <table class="min-w-full bg-white border border-gray-200 rounded-lg">
