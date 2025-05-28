@@ -3,19 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <title>Báo cáo Tổng quan</title>
+    <!-- Inline CSS for PDF rendering -->
     <style>
-        body { font-family: DejaVu Sans, sans-serif; font-size: 12px; }
-        h1 { text-align: center; color: #1E40AF; }
-        h2 { color: #1E40AF; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-        th { background-color: #E5E7EB; }
-        .summary { margin-bottom: 20px; }
-        .summary div { margin-bottom: 10px; }
+        body {
+            font-family: DejaVu Sans, sans-serif;
+            font-size: 12px;
+        }
+        h1 {
+            text-align: center;
+            color: #1E40AF;
+        }
+        h2 {
+            color: #1E40AF;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #E5E7EB;
+        }
+        .summary {
+            margin-bottom: 20px;
+        }
+        .summary div {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
+    <!-- Report title -->
     <h1>Báo cáo Tổng quan Hiệu suất</h1>
+
+    <!-- Summary statistics -->
     <div class="summary">
         <div><strong>Tổng số công việc:</strong> {{ $totalTasks }}</div>
         <div><strong>Hoàn thành đúng hạn:</strong> {{ $completedOnTime }}</div>
@@ -23,6 +49,7 @@
         <div><strong>Tỷ lệ hoàn thành:</strong> {{ $completionRate }}%</div>
     </div>
 
+    <!-- Task details section -->
     <h2>Chi tiết Công việc</h2>
     <table>
         <thead>
