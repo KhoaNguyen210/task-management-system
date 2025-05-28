@@ -5,6 +5,9 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Database\Seeders\DepartmentSeeder;
 use Database\Seeders\UserSeeder;
+use Database\Seeders\TaskDataSeeder;
+use Database\Seeders\TaskAssignmentDataSeeder;
+use Database\Seeders\TaskProgressDataSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,7 +20,14 @@ class DatabaseSeeder extends Seeder
 
         // Gọi UserSeeder sau để tạo người dùng và cập nhật head_id cho departments
         $this->call([
-             UserSeeder::class,
+            UserSeeder::class,
+        ]);
+
+        // Gọi các seeder mới cho tasks, task_assignments, task_progress
+        $this->call([
+            TaskDataSeeder::class,
+            TaskAssignmentDataSeeder::class,
+            TaskProgressDataSeeder::class,
         ]);
     }
 }

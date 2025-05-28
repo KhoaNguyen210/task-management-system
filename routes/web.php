@@ -27,6 +27,12 @@ Route::middleware('auth')->group(function () {
     Route::middleware(['check_auth_role:Lecturer'])->get('/dashboard/lecturer', [DashboardController::class, 'lecturerDashboard'])->name('dashboard.lecturer');
     Route::middleware(['check_auth_role:Secretary,Educational Staff'])->get('/dashboard/secretary', [DashboardController::class, 'secretaryDashboard'])->name('dashboard.secretary');
 
+    // --- Overview Report Route (UC-09) ---
+    Route::middleware(['check_auth_role:Dean'])->group(function () {
+        Route::get('/dashboard/overview', [TaskController::class, 'overviewReport'])->name('dashboard.overview');
+        Route::post('/dashboard/overview/export', [TaskController::class, 'exportReport'])->name('dashboard.overview.export');
+    });
+
     // --- Task Routes ---
     Route::prefix('tasks')->name('tasks.')->group(function () {
         // Route phân công công việc (Chỉ cho Department Head)
