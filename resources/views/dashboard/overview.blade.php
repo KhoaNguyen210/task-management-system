@@ -174,17 +174,15 @@
             </div>
 
             <!-- Nút xuất báo cáo -->
-            <form action="{{ route('dashboard.overview.export') }}" method="POST" class="flex space-x-4">
+            <form action="{{ route('dashboard.overview.export') }}" method="POST">
                 @csrf
                 <input type="hidden" name="start_date" value="{{ request('start_date') }}">
                 <input type="hidden" name="end_date" value="{{ request('end_date') }}">
                 <input type="hidden" name="department_id" value="{{ request('department_id') }}">
                 <input type="hidden" name="lecturer_id" value="{{ request('lecturer_id') }}">
-                <button type="submit" name="format" value="pdf" class="bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300 shadow-md transform hover:scale-105">
+                <input type="hidden" name="format" value="pdf">
+                <button type="submit" class="bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300 shadow-md transform hover:scale-105">
                     Xuất PDF
-                </button>
-                <button type="submit" name="format" value="excel" class="bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition duration-300 shadow-md transform hover:scale-105">
-                    Xuất Excel
                 </button>
             </form>
         </div>

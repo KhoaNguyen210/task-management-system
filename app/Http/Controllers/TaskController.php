@@ -16,8 +16,7 @@ use App\Notifications\TaskExtensionRequested;
 use App\Notifications\TaskExtensionDecision;
 use App\Notifications\TaskEvaluated;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\TasksExport;
+use App\Http\Requests\AnnualEvaluationReportRequest;
 
 class TaskController extends Controller
 {
@@ -545,7 +544,7 @@ class TaskController extends Controller
 
             if ($totalTasks === 0 && $request->filled(['start_date', 'end_date', 'department_id', 'lecturer_id'])) {
                 return view('dashboard.overview', $viewData)
-                    ->with('error', 'Hiện không có dữ liệu tổng hợp. Vui lòng kiểm tra lại sau.');
+                    ->with('error', 'Hiện không có dữ liệu tổng hợp. Vui lòng thử lại sau.');
             }
 
             return view('dashboard.overview', $viewData);
@@ -558,7 +557,7 @@ class TaskController extends Controller
     public function exportReport(Request $request)
     {
         $request->validate([
-            'format' => 'required|in:pdf,excel',
+            'format' => 'required|in:pdf',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'department_id' => 'nullable|exists:departments,department_id',
@@ -594,17 +593,216 @@ class TaskController extends Controller
             })->count();
             $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
 
-            // Xuất báo cáo
-            if ($request->format === 'pdf') {
-                $pdf = Pdf::loadView('dashboard.overview_pdf', compact(
-                    'tasks', 'totalTasks', 'completedOnTime', 'overdueTasks', 'completionRate'
-                ));
-                return $pdf->download('bao_cao_tong_quan.pdf');
-            } else {
-                return Excel::download(new TasksExport($tasks), 'bao_cao_tong_quan.xlsx');
-            }
+            // Xuất báo cáo PDF
+            $pdf = Pdf::loadView('dashboard.overview_pdf', compact(
+                'tasks', 'totalTasks', 'completedOnTime', 'overdueTasks', 'completionRate'
+            ));
+            return $pdf->download('bao_cao_tong_quan.pdf');
         } catch (\Exception $e) {
             Log::error('Error exporting report: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Có lỗi xảy ra khi xuất báo cáo. Vui lòng thử lại sau.');
+        }
+    }
+
+    public function annualEvaluationReport(AnnualEvaluationReportRequest $request)
+    {
+        try {
+            $user = Auth::user();
+            $validated = $request->validated();
+            $academic_year = $validated['academic_year'] ?? null;
+            $department_id = $validated['department_id'] ?? null;
+            $lecturer_id = $validated['lecturer_id'] ?? null;
+            $sort_by = $validated['sort_by'] ?? 'name';
+            $sort_order = $validated['sort_order'] ?? 'asc';
+
+            // Lấy danh sách bộ môn và giảng viên để hiển thị trong form
+            $departments = Department::orderBy('name', 'asc')->get();
+            $lecturers = User::where('role', 'Lecturer')
+                            ->when($user->role === 'Department Head', function ($query) use ($user) {
+                                $query->where('department_id', $user->department_id);
+                            })
+                            ->orderBy('name', 'asc')
+                            ->get();
+
+            // Truy vấn dữ liệu công việc
+            $query = Task::with(['assignedUsers', 'department'])
+                        ->when($user->role === 'Department Head', function ($query) use ($user) {
+                            $query->where('department_id', $user->department_id);
+                        });
+
+            // Lọc theo năm học
+            if ($academic_year) {
+                $start_year = $academic_year;
+                $end_year = $academic_year + 1;
+                $query->whereBetween('due_date', [
+                    "$start_year-01-01",
+                    "$end_year-12-31 23:59:59"
+                ]);
+            }
+
+            // Lọc theo bộ môn
+            if ($department_id) {
+                $query->where('department_id', $department_id);
+            }
+
+            // Lọc theo giảng viên
+            if ($lecturer_id) {
+                $query->whereHas('assignedUsers', function ($q) use ($lecturer_id) {
+                    $q->where('users.user_id', $lecturer_id);
+                });
+            }
+
+            $tasks = $query->get();
+
+            // Tính toán thống kê theo giảng viên
+            $lecturerStats = $tasks->flatMap(function ($task) {
+                return $task->assignedUsers->map(function ($user) use ($task) {
+                    return ['user_id' => $user->user_id, 'task' => $task];
+                });
+            })->groupBy('user_id')->map(function ($group) use ($sort_by, $sort_order) {
+                $totalTasks = $group->count();
+                $completedOnTime = $group->filter(function ($item) {
+                    return $item['task']->status === 'Completed' && $item['task']->updated_at <= $item['task']->due_date;
+                })->count();
+                $overdueTasks = $group->filter(function ($item) {
+                    return $item['task']->status !== 'Completed' && now()->gt($item['task']->due_date);
+                })->count();
+                $notCompleted = $group->filter(function ($item) {
+                    return $item['task']->status !== 'Completed' && now()->lte($item['task']->due_date);
+                })->count();
+                $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
+
+                // Tính điểm đánh giá trung bình
+                $evaluations = $group->pluck('task')->filter(function ($task) {
+                    return $task->evaluation_level !== null;
+                })->map(function ($task) {
+                    $levels = [
+                        'Không hoàn thành' => 0,
+                        'Hoàn thành yếu' => 1,
+                        'Hoàn thành' => 2,
+                        'Hoàn thành tích cực' => 3,
+                        'Hoàn thành tốt' => 4,
+                        'Hoàn thành xuất sắc' => 5
+                    ];
+                    return $levels[$task->evaluation_level] ?? 0;
+                });
+                $averageEvaluation = $evaluations->count() > 0 ? $evaluations->avg() : null;
+
+                $user = User::find($group->first()['user_id']);
+                return [
+                    'lecturer_id' => $user->user_id,
+                    'name' => $user->name ?? 'Không xác định',
+                    'department' => $user->department->name ?? 'Không xác định',
+                    'total_tasks' => $totalTasks,
+                    'completed_on_time' => $completedOnTime,
+                    'overdue_tasks' => $overdueTasks,
+                    'not_completed' => $notCompleted,
+                    'completion_rate' => $completionRate,
+                    'average_evaluation' => $averageEvaluation ? round($averageEvaluation, 2) : null,
+                ];
+            })->sortBy([[$sort_by, $sort_order]])->values();
+
+            if ($lecturerStats->isEmpty() && $request->filled(['academic_year', 'department_id', 'lecturer_id'])) {
+                return view('dashboard.annual-evaluation', compact('departments', 'lecturers', 'lecturerStats'))
+                    ->with('error', 'Không có dữ liệu cho năm này.');
+            }
+
+            return view('dashboard.annual-evaluation', compact(
+                'departments', 'lecturers', 'lecturerStats', 'academic_year', 'department_id', 'lecturer_id', 'sort_by', 'sort_order'
+            ));
+        } catch (\Exception $e) {
+            Log::error('Error displaying annual evaluation report: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Có lỗi xảy ra khi tạo báo cáo. Vui lòng thử lại sau.');
+        }
+    }
+
+    public function exportAnnualEvaluationReport(AnnualEvaluationReportRequest $request)
+    {
+        $validated = $request->validated();
+        $academic_year = $validated['academic_year'] ?? null;
+        $department_id = $validated['department_id'] ?? null;
+        $lecturer_id = $validated['lecturer_id'] ?? null;
+
+        try {
+            $user = Auth::user();
+            $query = Task::with(['assignedUsers', 'department'])
+                        ->when($user->role === 'Department Head', function ($query) use ($user) {
+                            $query->where('department_id', $user->department_id);
+                        });
+
+            if ($academic_year) {
+                $start_year = $academic_year;
+                $end_year = $academic_year + 1;
+                $query->whereBetween('due_date', [
+                    "$start_year-01-01",
+                    "$end_year-12-31 23:59:59"
+                ]);
+            }
+
+            if ($department_id) {
+                $query->where('department_id', $department_id);
+            }
+
+            if ($lecturer_id) {
+                $query->whereHas('assignedUsers', function ($q) use ($lecturer_id) {
+                    $q->where('users.user_id', $lecturer_id);
+                });
+            }
+
+            $tasks = $query->get();
+
+            $lecturerStats = $tasks->flatMap(function ($task) {
+                return $task->assignedUsers->map(function ($user) use ($task) {
+                    return ['user_id' => $user->user_id, 'task' => $task];
+                });
+            })->groupBy('user_id')->map(function ($group) {
+                $totalTasks = $group->count();
+                $completedOnTime = $group->filter(function ($item) {
+                    return $item['task']->status === 'Completed' && $item['task']->updated_at <= $item['task']->due_date;
+                })->count();
+                $overdueTasks = $group->filter(function ($item) {
+                    return $item['task']->status !== 'Completed' && now()->gt($item['task']->due_date);
+                })->count();
+                $notCompleted = $group->filter(function ($item) {
+                    return $item['task']->status !== 'Completed' && now()->lte($item['task']->due_date);
+                })->count();
+                $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
+
+                $evaluations = $group->pluck('task')->filter(function ($task) {
+                    return $task->evaluation_level !== null;
+                })->map(function ($task) {
+                    $levels = [
+                        'Không hoàn thành' => 0,
+                        'Hoàn thành yếu' => 1,
+                        'Hoàn thành' => 2,
+                        'Hoàn thành tích cực' => 3,
+                        'Hoàn thành tốt' => 4,
+                        'Hoàn thành xuất sắc' => 5
+                    ];
+                    return $levels[$task->evaluation_level] ?? 0;
+                });
+                $averageEvaluation = $evaluations->count() > 0 ? $evaluations->avg() : null;
+
+                $user = User::find($group->first()['user_id']);
+                return [
+                    'lecturer_id' => $user->user_id,
+                    'name' => $user->name ?? 'Không xác định',
+                    'department' => $user->department->name ?? 'Không xác định',
+                    'total_tasks' => $totalTasks,
+                    'completed_on_time' => $completedOnTime,
+                    'overdue_tasks' => $overdueTasks,
+                    'not_completed' => $notCompleted,
+                    'completion_rate' => $completionRate,
+                    'average_evaluation' => $averageEvaluation ? round($averageEvaluation, 2) : null,
+                ];
+            })->values();
+
+            $pdf = Pdf::loadView('dashboard.annual-evaluation-pdf', compact(
+                'lecturerStats', 'academic_year', 'department_id', 'lecturer_id'
+            ));
+            return $pdf->download('bao_cao_danh_gia_cuoi_nam.pdf');
+        } catch (\Exception $e) {
+            Log::error('Error exporting annual evaluation report: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Có lỗi xảy ra khi xuất báo cáo. Vui lòng thử lại sau.');
         }
     }

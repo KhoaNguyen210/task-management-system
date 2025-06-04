@@ -33,6 +33,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/dashboard/overview/export', [TaskController::class, 'exportReport'])->name('dashboard.overview.export');
     });
 
+    // --- Annual Evaluation Report Route (UC-12) ---
+    Route::middleware(['check_auth_role:Dean,Department Head'])->group(function () {
+        Route::get('/dashboard/annual-evaluation', [TaskController::class, 'annualEvaluationReport'])->name('dashboard.annual-evaluation');
+        Route::post('/dashboard/annual-evaluation/export', [TaskController::class, 'exportAnnualEvaluationReport'])->name('dashboard.annual-evaluation.export');
+    });
+
     // --- Task Routes ---
     Route::prefix('tasks')->name('tasks.')->group(function () {
         // Route phân công công việc (Chỉ cho Department Head)
