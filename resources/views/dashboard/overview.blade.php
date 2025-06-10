@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Báo cáo Tổng quan - Hệ thống quản lý công việc</title>
+    <!-- Vite assets for CSS and JS -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-gray-100 font-sans">
+    <!-- Navigation bar -->
     <nav class="bg-blue-800 text-white p-4 shadow-md">
         <div class="container mx-auto flex justify-between items-center">
             <div class="flex items-center">
@@ -25,7 +27,9 @@
         </div>
     </nav>
 
+    <!-- Main content -->
     <div class="container mx-auto mt-8 px-4 pb-16">
+        <!-- Page title and back link -->
         <div class="flex justify-between items-center mb-8">
             <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Báo cáo Tổng quan</h2>
             <a href="{{ route('dashboard.dean') }}"
@@ -34,7 +38,7 @@
             </a>
         </div>
 
-        <!-- Thông báo -->
+        <!-- Error message -->
         @if (session('error'))
             <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
                 <strong class="font-bold">Lỗi!</strong>
@@ -42,7 +46,7 @@
             </div>
         @endif
 
-        <!-- Form lọc -->
+        <!-- Filter form -->
         <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
             <h3 class="text-xl md:text-2xl font-semibold text-gray-700 mb-4">Lọc Báo cáo</h3>
             <form action="{{ route('dashboard.overview') }}" method="GET">
@@ -87,7 +91,7 @@
             </form>
         </div>
 
-        <!-- Dashboard -->
+        <!-- Dashboard statistics -->
         <div class="bg-white rounded-lg shadow-lg p-6">
             <h3 class="text-xl md:text-2xl font-semibold text-gray-700 mb-4">Tổng quan Hiệu suất</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -105,13 +109,13 @@
                 </div>
             </div>
 
-            <!-- Biểu đồ -->
+            <!-- Completion chart -->
             <div class="mb-6">
                 <h4 class="text-lg font-semibold text-gray-700 mb-2">Tỷ lệ hoàn thành</h4>
                 <canvas id="completionChart" class="w-full h-64"></canvas>
             </div>
 
-            <!-- Bảng theo bộ môn -->
+            <!-- Department progress table -->
             <div class="mb-6">
                 <h4 class="text-lg font-semibold text-gray-700 mb-2">Tiến độ theo Bộ môn</h4>
                 <table class="min-w-full bg-white border border-gray-200 rounded-lg">
@@ -142,7 +146,7 @@
                 </table>
             </div>
 
-            <!-- Bảng theo giảng viên -->
+            <!-- Lecturer performance table -->
             <div class="mb-6">
                 <h4 class="text-lg font-semibold text-gray-700 mb-2">Hiệu suất Giảng viên</h4>
                 <table class="min-w-full bg-white border border-gray-200 rounded-lg">
@@ -173,7 +177,7 @@
                 </table>
             </div>
 
-            <!-- Nút xuất báo cáo -->
+            <!-- Export report button -->
             <form action="{{ route('dashboard.overview.export') }}" method="POST">
                 @csrf
                 <input type="hidden" name="start_date" value="{{ request('start_date') }}">
@@ -188,7 +192,7 @@
         </div>
     </div>
 
-    <!-- Biểu đồ Chart.js, dữ liệu đã được cập nhật từ controller -->
+    <!-- Chart.js script for completion pie chart -->
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const ctx = document.getElementById('completionChart').getContext('2d');
