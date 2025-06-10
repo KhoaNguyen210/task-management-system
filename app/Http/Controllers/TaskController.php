@@ -17,6 +17,7 @@ use App\Notifications\TaskExtensionDecision;
 use App\Notifications\TaskEvaluated;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Http\Requests\AnnualEvaluationReportRequest;
+use Illuminate\Support\Facades\Cache;
 
 class TaskController extends Controller
 {
@@ -83,7 +84,6 @@ class TaskController extends Controller
             } else {
                 return redirect()->route($routeName)->with('error', 'Bạn không có quyền xem chi tiết công việc này.');
             }
-    
         } catch (\Exception $e) {
             Log::error('Error showing task details: ' . $e->getMessage());
             return redirect()->route($routeName)->with('error', 'Đã xảy ra lỗi khi xem chi tiết công việc.');
@@ -459,6 +459,9 @@ class TaskController extends Controller
     public function overviewReport(Request $request)
     {
         try {
+            // Xóa cache để đảm bảo dữ liệu mới
+            Cache::flush();
+
             // Validate input
             $request->validate([
                 'start_date' => 'nullable|date',
@@ -500,17 +503,17 @@ class TaskController extends Controller
             // Tính toán các chỉ số
             $totalTasks = $tasks->count();
             $completedOnTime = $tasks->filter(function ($task) {
-                return $task->status === 'Completed' && ($task->updated_at <= $task->due_date);
+                return in_array($task->status, ['Completed', 'Evaluated']) && ($task->updated_at <= $task->due_date);
             })->count();
             $overdueTasks = $tasks->filter(function ($task) {
-                return $task->status !== 'Completed' && now()->gt($task->due_date);
+                return !in_array($task->status, ['Completed', 'Evaluated']) && now()->gt($task->due_date);
             })->count();
             $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
 
             // Dữ liệu theo bộ môn
             $departmentStats = $tasks->groupBy('department_id')->map(function ($group) {
                 $total = $group->count();
-                $completed = $group->where('status', 'Completed')->count();
+                $completed = $group->whereIn('status', ['Completed', 'Evaluated'])->count();
                 return [
                     'name' => $group->first()->department->name ?? 'Không xác định',
                     'total' => $total,
@@ -526,7 +529,7 @@ class TaskController extends Controller
                 });
             })->groupBy('user_id')->map(function ($group) {
                 $total = $group->count();
-                $completed = $group->where('task.status', 'Completed')->count();
+                $completed = $group->whereIn('task.status', ['Completed', 'Evaluated'])->count();
                 $user = User::find($group->first()['user_id']);
                 return [
                     'name' => $user->name ?? 'Không xác định',
@@ -544,7 +547,7 @@ class TaskController extends Controller
 
             if ($totalTasks === 0 && $request->filled(['start_date', 'end_date', 'department_id', 'lecturer_id'])) {
                 return view('dashboard.overview', $viewData)
-                    ->with('error', 'Hiện không có dữ liệu tổng hợp. Vui lòng thử lại sau.');
+                    ->with('error', 'Hiện không có dữ liệu tổng hợp. Vui lòng kiểm tra lại sau.');
             }
 
             return view('dashboard.overview', $viewData);
@@ -586,10 +589,10 @@ class TaskController extends Controller
             // Tính toán chỉ số
             $totalTasks = $tasks->count();
             $completedOnTime = $tasks->filter(function ($task) {
-                return $task->status === 'Completed' && ($task->updated_at <= $task->due_date);
+                return in_array($task->status, ['Completed', 'Evaluated']) && ($task->updated_at <= $task->due_date);
             })->count();
             $overdueTasks = $tasks->filter(function ($task) {
-                return $task->status !== 'Completed' && now()->gt($task->due_date);
+                return !in_array($task->status, ['Completed', 'Evaluated']) && now()->gt($task->due_date);
             })->count();
             $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
 
@@ -607,6 +610,9 @@ class TaskController extends Controller
     public function annualEvaluationReport(AnnualEvaluationReportRequest $request)
     {
         try {
+            // Xóa cache để đảm bảo dữ liệu mới
+            Cache::flush();
+
             $user = Auth::user();
             $validated = $request->validated();
             $academic_year = $validated['academic_year'] ?? null;
@@ -662,13 +668,13 @@ class TaskController extends Controller
             })->groupBy('user_id')->map(function ($group) use ($sort_by, $sort_order) {
                 $totalTasks = $group->count();
                 $completedOnTime = $group->filter(function ($item) {
-                    return $item['task']->status === 'Completed' && $item['task']->updated_at <= $item['task']->due_date;
+                    return in_array($item['task']->status, ['Completed', 'Evaluated']) && $item['task']->updated_at <= $item['task']->due_date;
                 })->count();
                 $overdueTasks = $group->filter(function ($item) {
-                    return $item['task']->status !== 'Completed' && now()->gt($item['task']->due_date);
+                    return !in_array($item['task']->status, ['Completed', 'Evaluated']) && now()->gt($item['task']->due_date);
                 })->count();
                 $notCompleted = $group->filter(function ($item) {
-                    return $item['task']->status !== 'Completed' && now()->lte($item['task']->due_date);
+                    return !in_array($item['task']->status, ['Completed', 'Evaluated']) && now()->lte($item['task']->due_date);
                 })->count();
                 $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
 
@@ -758,13 +764,13 @@ class TaskController extends Controller
             })->groupBy('user_id')->map(function ($group) {
                 $totalTasks = $group->count();
                 $completedOnTime = $group->filter(function ($item) {
-                    return $item['task']->status === 'Completed' && $item['task']->updated_at <= $item['task']->due_date;
+                    return in_array($item['task']->status, ['Completed', 'Evaluated']) && $item['task']->updated_at <= $item['task']->due_date;
                 })->count();
                 $overdueTasks = $group->filter(function ($item) {
-                    return $item['task']->status !== 'Completed' && now()->gt($item['task']->due_date);
+                    return !in_array($item['task']->status, ['Completed', 'Evaluated']) && now()->gt($item['task']->due_date);
                 })->count();
                 $notCompleted = $group->filter(function ($item) {
-                    return $item['task']->status !== 'Completed' && now()->lte($item['task']->due_date);
+                    return !in_array($item['task']->status, ['Completed', 'Evaluated']) && now()->lte($item['task']->due_date);
                 })->count();
                 $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
 

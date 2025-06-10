@@ -188,6 +188,7 @@
         </div>
     </div>
 
+    <!-- Biểu đồ Chart.js, dữ liệu đã được cập nhật từ controller -->
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const ctx = document.getElementById('completionChart').getContext('2d');
