@@ -212,5 +212,3 @@ composer dump-autoload
 ---
 
 > ✅ **Gợi ý:** Bạn có thể gộp các lệnh trên vào 1 file shell (Linux/macOS) hoặc batch script (Windows) để chạy nhanh hơn.
-
-```
