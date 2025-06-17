@@ -138,3 +138,79 @@ Bạn có thể sử dụng các tài khoản sau để đăng nhập và kiểm
 
 -   Lê Minh Triết – 521H0173
 -   Nguyễn Ngô Đăng Khoa – 521H0084
+
+## 🛠️ Tóm gọn các bước cần thiết để chạy dự án
+
+Dưới đây là các bước cơ bản để thiết lập, chạy, và xử lý cache trong dự án Laravel.
+
+---
+
+### ✅ 1. Cài đặt project (lần đầu hoặc sau khi clone)
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate:fresh --seed
+php artisan storage:link
+````
+
+---
+
+### 🔧 2. Các lệnh Artisan thường dùng
+
+| Lệnh                         | Chức năng                                       |
+| ---------------------------- | ----------------------------------------------- |
+| `php artisan config:clear`   | Xoá cache cấu hình `.env` và `config/*.php`     |
+| `php artisan cache:clear`    | Xoá cache dữ liệu ứng dụng                      |
+| `php artisan route:clear`    | Xoá cache các route đã compile                  |
+| `php artisan view:clear`     | Xoá cache các view (blade đã biên dịch)         |
+| `php artisan optimize:clear` | Xoá toàn bộ cache (config, route, view, events) |
+
+> 🔁 **Nên chạy khi muốn clean hoặc sau khi thay đổi file `.env`, routes hoặc views.**
+
+---
+
+### 🔄 3. Composer
+
+| Lệnh                     | Chức năng                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| `composer dump-autoload` | Tạo lại danh sách autoload class, dùng khi thêm class mới (Model, Seeder, Helper,...) |
+
+---
+
+### 💻 4. Xử lý frontend (NPM)
+
+| Lệnh            | Chức năng                                                    |
+| --------------- | ------------------------------------------------------------ |
+| `npm install`   | Cài các package front-end được khai báo trong `package.json` |
+| `npm run dev`   | Biên dịch CSS/JS phục vụ quá trình phát triển                |
+| `npm run build` | (Tùy chọn) Biên dịch CSS/JS cho production (gọn nhẹ, tối ưu) |
+
+---
+
+### 🌐 5. Khởi chạy server local
+
+```bash
+php artisan serve
+```
+
+* Mở ứng dụng tại `http://127.0.0.1:8000`
+
+---
+
+### 📦 Tóm tắt lệnh reset môi trường cache (đề xuất khi gặp lỗi config/view)
+
+```bash
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan view:clear
+php artisan optimize:clear
+composer dump-autoload
+```
+
+---
+
+> ✅ **Gợi ý:** Bạn có thể gộp các lệnh trên vào 1 file shell (Linux/macOS) hoặc batch script (Windows) để chạy nhanh hơn.
+
+```
