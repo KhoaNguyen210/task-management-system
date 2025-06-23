@@ -19,21 +19,39 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use App\Http\Requests\AnnualEvaluationReportRequest;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * TaskController handles all task-related operations such as assigning, updating, evaluating,
+ * and generating reports for tasks within the task management system.
+ */
 class TaskController extends Controller
 {
+    /**
+     * Display the form for assigning tasks to lecturers.
+     *
+     * @return \Illuminate\View\View
+     */
     public function assignTasks()
     {
         $departmentId = Auth::user()->department_id;
+        // Fetch lecturers in the same department, excluding the current user
         $lecturers = User::where('department_id', $departmentId)
                          ->where('role', 'Lecturer')
                          ->where('user_id', '!=', Auth::id())
                          ->orderBy('name', 'asc')
                          ->get();
+
         return view('tasks.assign', compact('lecturers'));
     }
 
+    /**
+     * Store a newly created task and assign it to selected users.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function storeTask(Request $request)
     {
+        // Validate request data
         $validatedData = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
@@ -45,6 +63,7 @@ class TaskController extends Controller
         DB::beginTransaction();
         try {
             $departmentId = Auth::user()->department_id;
+            // Create new task
             $task = Task::create([
                 'title' => $validatedData['title'],
                 'description' => $validatedData['description'],
@@ -53,8 +72,11 @@ class TaskController extends Controller
                 'created_by' => Auth::id(),
                 'department_id' => $departmentId,
             ]);
+
+            // Assign task to selected users
             $task->assignedUsers()->attach($validatedData['assigned_users']);
             DB::commit();
+
             return redirect()->back()->with('success', 'Phân công công việc thành công!');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -63,49 +85,76 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Display details of a specific task.
+     *
+     * @param  int  $taskId
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function show($taskId)
     {
         $user = Auth::user();
+        // Determine redirect route based on user role
         $routeName = match ($user->role) {
             'Department Head' => 'dashboard.department_head',
             'Lecturer' => 'dashboard.lecturer',
             'Dean' => 'dashboard.dean',
             default => 'home',
         };
+
         try {
+            // Fetch task with related data
             $task = Task::with(['creatorUser', 'assignedUsers', 'department', 'progressUpdates.user', 'extensionRequests.user', 'extensionRequests.approver', 'evaluator'])
                         ->findOrFail($taskId);
-    
+
+            // Check user permissions
             $isAssignedLecturer = $user->role === 'Lecturer' && $task->assignedUsers->contains($user->user_id);
             $isDepartmentHeadOfTask = $user->role === 'Department Head' && $user->department_id === $task->department_id;
-    
+
             if ($isAssignedLecturer || $isDepartmentHeadOfTask) {
                 return view('tasks.show', compact('task'));
-            } else {
-                return redirect()->route($routeName)->with('error', 'Bạn không có quyền xem chi tiết công việc này.');
             }
+
+            return redirect()->route($routeName)->with('error', 'Bạn không có quyền xem chi tiết công việc này.');
         } catch (\Exception $e) {
             Log::error('Error showing task details: ' . $e->getMessage());
             return redirect()->route($routeName)->with('error', 'Đã xảy ra lỗi khi xem chi tiết công việc.');
         }
     }
 
+    /**
+     * Display the form for updating task progress.
+     *
+     * @param  int  $taskId
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function showUpdateProgressForm($taskId)
     {
         $task = Task::findOrFail($taskId);
+        // Verify if user is assigned to the task
         if (!$task->assignedUsers->contains(Auth::id())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
+
         return view('tasks.update_progress', compact('task'));
     }
 
+    /**
+     * Update the progress of a task.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $taskId
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function updateProgress(Request $request, $taskId)
     {
         $task = Task::findOrFail($taskId);
+        // Verify if user is assigned to the task
         if (!$task->assignedUsers->contains(Auth::id())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
 
+        // Validate request data
         $request->validate([
             'status' => 'required|string|in:Not Started,In Progress,Completed',
             'comment' => 'nullable|string|max:1000',
@@ -114,18 +163,21 @@ class TaskController extends Controller
 
         DB::beginTransaction();
         try {
+            // Create new progress update
             $progress = new TaskProgress();
             $progress->task_id = $taskId;
             $progress->user_id = Auth::id();
             $progress->status = $request->status;
             $progress->comment = $request->comment;
 
+            // Handle file attachment if present
             if ($request->hasFile('attachment')) {
                 $path = $request->file('attachment')->store('attachments', 'public');
                 $progress->attachment = $path;
             }
 
             $progress->save();
+            // Update task status
             $task->status = $request->status;
             $task->save();
 
@@ -138,26 +190,44 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Display the form for requesting a task extension.
+     *
+     * @param  int  $taskId
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function showRequestExtensionForm($taskId)
     {
         $task = Task::findOrFail($taskId);
+        // Verify if user is assigned to the task
         if (!$task->assignedUsers->contains(Auth::user())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
+
         return view('tasks.request_extension', compact('task'));
     }
 
+    /**
+     * Submit a task extension request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $taskId
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function requestExtension(Request $request, $taskId)
     {
         $task = Task::findOrFail($taskId);
+        // Verify if user is assigned to the task
         if (!$task->assignedUsers->contains(Auth::user())) {
             return redirect()->back()->with('error', 'Bạn không được phân công cho công việc này.');
         }
 
+        // Check for existing pending extension requests
         if ($task->extensionRequests()->where('status', 'Pending')->exists()) {
             return redirect()->back()->with('error', 'Công việc này đã có yêu cầu gia hạn đang chờ duyệt.');
         }
 
+        // Validate request data
         $request->validate([
             'reason' => 'required|string|max:1000',
             'new_due_date' => 'required|date|after:today',
@@ -165,6 +235,7 @@ class TaskController extends Controller
 
         DB::beginTransaction();
         try {
+            // Create new extension request
             $extensionRequest = new TaskExtensionRequest();
             $extensionRequest->task_id = $taskId;
             $extensionRequest->user_id = Auth::id();
@@ -173,6 +244,7 @@ class TaskController extends Controller
             $extensionRequest->status = 'Pending';
             $extensionRequest->save();
 
+            // Notify department head
             $departmentHead = User::where('role', 'Department Head')
                                  ->where('department_id', $task->department_id)
                                  ->first();
@@ -189,9 +261,16 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Display the form for evaluating a task.
+     *
+     * @param  int  $taskId
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function showEvaluationForm($taskId)
     {
         $user = Auth::user();
+        // Restrict access to Department Heads only
         if ($user->role !== 'Department Head') {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền đánh giá công việc.');
         }
@@ -199,6 +278,7 @@ class TaskController extends Controller
         $task = Task::with(['creatorUser', 'assignedUsers', 'department', 'progressUpdates.user'])
                     ->findOrFail($taskId);
 
+        // Verify department ownership and task eligibility
         if ($user->department_id !== $task->department_id) {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền đánh giá công việc này.');
         }
@@ -210,15 +290,24 @@ class TaskController extends Controller
         return view('tasks.evaluate', compact('task'));
     }
 
+    /**
+     * Evaluate a completed task.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $taskId
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function evaluateTask(Request $request, $taskId)
     {
         $user = Auth::user();
+        // Restrict access to Department Heads only
         if ($user->role !== 'Department Head') {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền đánh giá công việc.');
         }
 
         $task = Task::with(['assignedUsers'])->findOrFail($taskId);
 
+        // Verify department ownership and task eligibility
         if ($user->department_id !== $task->department_id) {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền đánh giá công việc này.');
         }
@@ -228,6 +317,7 @@ class TaskController extends Controller
             return redirect()->route('dashboard.department_head')->with('error', 'Công việc này không thể được đánh giá.');
         }
 
+        // Validate request data
         $request->validate([
             'evaluation_level' => 'required|in:Không hoàn thành,Hoàn thành yếu,Hoàn thành,Hoàn thành tích cực,Hoàn thành tốt,Hoàn thành xuất sắc',
             'evaluation_comment' => 'nullable|string|max:1000',
@@ -241,6 +331,7 @@ class TaskController extends Controller
                 'role' => $user->role,
             ]);
 
+            // Update task evaluation
             $task->evaluation_level = $request->evaluation_level;
             $task->evaluation_comment = $request->evaluation_comment;
             $task->evaluated_by = $user->user_id;
@@ -249,6 +340,7 @@ class TaskController extends Controller
 
             Log::info('Task ID: ' . $taskId . ' evaluated successfully with evaluated_by: ' . $task->evaluated_by);
 
+            // Notify assigned users
             foreach ($task->assignedUsers as $assignee) {
                 $assignee->notify(new TaskEvaluated($task));
             }
@@ -262,13 +354,20 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * List pending extension requests for Department Head.
+     *
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function listExtensionRequests()
     {
         $user = Auth::user();
+        // Restrict access to Department Heads only
         if ($user->role !== 'Department Head') {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xem danh sách yêu cầu gia hạn.');
         }
 
+        // Fetch pending extension requests for the user's department
         $extensionRequests = TaskExtensionRequest::whereHas('task', function ($query) use ($user) {
             $query->where('department_id', $user->department_id);
         })
@@ -280,9 +379,16 @@ class TaskController extends Controller
         return view('tasks.extension_requests', compact('extensionRequests'));
     }
 
+    /**
+     * Display details of a specific extension request.
+     *
+     * @param  int  $requestId
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function showExtensionRequest($requestId)
     {
         $user = Auth::user();
+        // Restrict access to Department Heads only
         if ($user->role !== 'Department Head') {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xem chi tiết yêu cầu gia hạn.');
         }
@@ -290,6 +396,7 @@ class TaskController extends Controller
         $extensionRequest = TaskExtensionRequest::with(['task', 'user'])
                                                 ->findOrFail($requestId);
 
+        // Verify department ownership and request status
         if ($extensionRequest->task->department_id !== $user->department_id) {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xem chi tiết yêu cầu này.');
         }
@@ -301,9 +408,17 @@ class TaskController extends Controller
         return view('tasks.approve_extension', compact('extensionRequest'));
     }
 
+    /**
+     * Approve or reject a task extension request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $requestId
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function approveExtensionRequest(Request $request, $requestId)
     {
         $user = Auth::user();
+        // Restrict access to Department Heads only
         if ($user->role !== 'Department Head') {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xử lý yêu cầu gia hạn.');
         }
@@ -311,6 +426,7 @@ class TaskController extends Controller
         $extensionRequest = TaskExtensionRequest::with(['task', 'user'])
                                                 ->findOrFail($requestId);
 
+        // Verify department ownership and request status
         if ($extensionRequest->task->department_id !== $user->department_id) {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xử lý yêu cầu này.');
         }
@@ -319,6 +435,7 @@ class TaskController extends Controller
             return redirect()->route('tasks.extension_requests')->with('error', 'Yêu cầu này đã được xử lý.');
         }
 
+        // Validate request data
         $request->validate([
             'decision' => 'required|in:approved,rejected',
             'comment' => 'nullable|string|max:1000',
@@ -327,17 +444,20 @@ class TaskController extends Controller
         DB::beginTransaction();
         try {
             $decision = $request->decision;
+            // Update extension request status
             $extensionRequest->status = $decision === 'approved' ? 'Approved' : 'Rejected';
             $extensionRequest->approved_by = $user->user_id;
             $extensionRequest->comment = $request->comment;
             $extensionRequest->save();
 
+            // Update task due date if approved
             if ($decision === 'approved') {
                 $task = $extensionRequest->task;
                 $task->due_date = $extensionRequest->new_due_date;
                 $task->save();
             }
 
+            // Notify the requester
             $extensionRequest->user->notify(new TaskExtensionDecision($extensionRequest, $decision));
 
             DB::commit();
@@ -350,21 +470,30 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Delete a task and its related data.
+     *
+     * @param  int  $taskId
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function destroy($taskId)
     {
         $user = Auth::user();
+        // Restrict access to Department Heads only
         if ($user->role !== 'Department Head') {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xóa công việc.');
         }
 
         $task = Task::findOrFail($taskId);
 
+        // Verify department ownership
         if ($user->department_id !== $task->department_id) {
             return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền xóa công việc này.');
         }
 
         DB::beginTransaction();
         try {
+            // Detach assigned users and delete related data
             $task->assignedUsers()->detach();
             TaskProgress::where('task_id', $task->id)->delete();
             TaskExtensionRequest::where('task_id', $task->id)->delete();
@@ -379,13 +508,20 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Display the task search form.
+     *
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function searchForm()
     {
         $user = Auth::user();
+        // Restrict access to Dean or Department Head
         if (!in_array($user->role, ['Dean', 'Department Head'])) {
             return redirect()->route('home')->with('error', 'Bạn không có quyền truy cập chức năng tìm kiếm.');
         }
 
+        // Fetch lecturers based on user role
         $lecturers = User::where('role', 'Lecturer')
                         ->when($user->role === 'Department Head', function ($query) use ($user) {
                             $query->where('department_id', $user->department_id);
@@ -398,13 +534,21 @@ class TaskController extends Controller
         return view('tasks.search', compact('lecturers', 'tasks'));
     }
 
+    /**
+     * Perform a task search based on provided criteria.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function search(Request $request)
     {
         $user = Auth::user();
+        // Restrict access to Dean or Department Head
         if (!in_array($user->role, ['Dean', 'Department Head'])) {
             return redirect()->route('home')->with('error', 'Bạn không có quyền truy cập chức năng tìm kiếm.');
         }
 
+        // Validate request data
         $request->validate([
             'due_date_from' => 'nullable|date',
             'due_date_to' => 'nullable|date|after_or_equal:due_date_from',
@@ -413,30 +557,32 @@ class TaskController extends Controller
         ]);
 
         try {
+            // Build task query
             $query = Task::with(['assignedUsers', 'department'])
                         ->when($user->role === 'Department Head', function ($query) use ($user) {
                             $query->where('department_id', $user->department_id);
                         });
 
+            // Apply filters
             if ($request->filled('due_date_from')) {
                 $query->whereDate('due_date', '>=', $request->due_date_from);
             }
             if ($request->filled('due_date_to')) {
                 $query->whereDate('due_date', '<=', $request->due_date_to);
             }
-
             if ($request->filled('assignee')) {
                 $query->whereHas('assignedUsers', function ($q) use ($request) {
                     $q->where('task_assignments.user_id', $request->assignee);
                 });
             }
-
             if ($request->filled('keyword')) {
                 $query->where('title', 'like', '%' . $request->keyword . '%');
             }
 
+            // Fetch tasks with pagination
             $tasks = $query->orderBy('due_date', 'asc')->paginate(10);
 
+            // Fetch lecturers for form
             $lecturers = User::where('role', 'Lecturer')
                             ->when($user->role === 'Department Head', function ($query) use ($user) {
                                 $query->where('department_id', $user->department_id);
@@ -444,6 +590,7 @@ class TaskController extends Controller
                             ->orderBy('name', 'asc')
                             ->get();
 
+            // Handle empty results
             if ($tasks->isEmpty() && $request->filled(['due_date_from', 'due_date_to', 'assignee', 'keyword'])) {
                 return view('tasks.search', compact('tasks', 'lecturers'))
                     ->with('error', 'Không tìm thấy công việc phù hợp.');
@@ -456,13 +603,19 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Generate an overview report for task performance.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function overviewReport(Request $request)
     {
         try {
-            // Xóa cache để đảm bảo dữ liệu mới
+            // Clear cache to ensure fresh data
             Cache::flush();
 
-            // Validate input
+            // Validate request data
             $request->validate([
                 'start_date' => 'nullable|date',
                 'end_date' => 'nullable|date|after_or_equal:start_date',
@@ -470,37 +623,31 @@ class TaskController extends Controller
                 'lecturer_id' => 'nullable|exists:users,user_id',
             ]);
 
-            // Lấy danh sách bộ môn và giảng viên
+            // Fetch departments and lecturers
             $departments = Department::orderBy('name', 'asc')->get();
             $lecturers = User::where('role', 'Lecturer')->orderBy('name', 'asc')->get();
 
-            // Truy vấn dữ liệu
+            // Build task query
             $query = Task::with(['department', 'assignedUsers']);
-
-            // Lọc theo thời gian
             if ($request->filled('start_date')) {
                 $query->whereDate('due_date', '>=', $request->start_date);
             }
             if ($request->filled('end_date')) {
                 $query->whereDate('due_date', '<=', $request->end_date);
             }
-
-            // Lọc theo bộ môn
             if ($request->filled('department_id')) {
                 $query->where('department_id', $request->department_id);
             }
-
-            // Lọc theo giảng viên
             if ($request->filled('lecturer_id')) {
                 $query->whereHas('assignedUsers', function ($q) use ($request) {
                     $q->where('users.user_id', $request->lecturer_id);
                 });
             }
 
-            // Lấy dữ liệu
+            // Fetch tasks
             $tasks = $query->get();
 
-            // Tính toán các chỉ số
+            // Calculate metrics
             $totalTasks = $tasks->count();
             $completedOnTime = $tasks->filter(function ($task) {
                 return in_array($task->status, ['Completed', 'Evaluated']) && ($task->updated_at <= $task->due_date);
@@ -510,7 +657,7 @@ class TaskController extends Controller
             })->count();
             $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
 
-            // Dữ liệu theo bộ môn
+            // Department statistics
             $departmentStats = $tasks->groupBy('department_id')->map(function ($group) {
                 $total = $group->count();
                 $completed = $group->whereIn('status', ['Completed', 'Evaluated'])->count();
@@ -522,7 +669,7 @@ class TaskController extends Controller
                 ];
             })->values();
 
-            // Dữ liệu theo giảng viên
+            // Lecturer statistics
             $lecturerStats = $tasks->flatMap(function ($task) {
                 return $task->assignedUsers->map(function ($user) use ($task) {
                     return ['user_id' => $user->user_id, 'task' => $task];
@@ -539,12 +686,13 @@ class TaskController extends Controller
                 ];
             })->values();
 
-            // Trả về view với tất cả biến, kể cả khi không có dữ liệu
+            // Prepare view data
             $viewData = compact(
                 'totalTasks', 'completedOnTime', 'overdueTasks', 'completionRate',
                 'departmentStats', 'lecturers', 'departments', 'lecturerStats'
             );
 
+            // Handle empty results
             if ($totalTasks === 0 && $request->filled(['start_date', 'end_date', 'department_id', 'lecturer_id'])) {
                 return view('dashboard.overview', $viewData)
                     ->with('error', 'Hiện không có dữ liệu tổng hợp. Vui lòng kiểm tra lại sau.');
@@ -557,8 +705,15 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Export the overview report as a PDF.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
+     */
     public function exportReport(Request $request)
     {
+        // Validate request data
         $request->validate([
             'format' => 'required|in:pdf',
             'start_date' => 'nullable|date',
@@ -568,7 +723,7 @@ class TaskController extends Controller
         ]);
 
         try {
-            // Truy vấn dữ liệu
+            // Build task query
             $query = Task::with(['department', 'assignedUsers']);
             if ($request->filled('start_date')) {
                 $query->whereDate('due_date', '>=', $request->start_date);
@@ -584,9 +739,11 @@ class TaskController extends Controller
                     $q->where('users.user_id', $request->lecturer_id);
                 });
             }
+
+            // Fetch tasks
             $tasks = $query->get();
 
-            // Tính toán chỉ số
+            // Calculate metrics
             $totalTasks = $tasks->count();
             $completedOnTime = $tasks->filter(function ($task) {
                 return in_array($task->status, ['Completed', 'Evaluated']) && ($task->updated_at <= $task->due_date);
@@ -596,7 +753,7 @@ class TaskController extends Controller
             })->count();
             $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
 
-            // Xuất báo cáo PDF
+            // Generate and download PDF
             $pdf = Pdf::loadView('dashboard.overview_pdf', compact(
                 'tasks', 'totalTasks', 'completedOnTime', 'overdueTasks', 'completionRate'
             ));
@@ -607,10 +764,16 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Generate an annual evaluation report for lecturers.
+     *
+     * @param  \App\Http\Requests\AnnualEvaluationReportRequest  $request
+     * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
+     */
     public function annualEvaluationReport(AnnualEvaluationReportRequest $request)
     {
         try {
-            // Xóa cache để đảm bảo dữ liệu mới
+            // Clear cache to ensure fresh data
             Cache::flush();
 
             $user = Auth::user();
@@ -621,7 +784,7 @@ class TaskController extends Controller
             $sort_by = $validated['sort_by'] ?? 'name';
             $sort_order = $validated['sort_order'] ?? 'asc';
 
-            // Lấy danh sách bộ môn và giảng viên để hiển thị trong form
+            // Fetch departments and lecturers
             $departments = Department::orderBy('name', 'asc')->get();
             $lecturers = User::where('role', 'Lecturer')
                             ->when($user->role === 'Department Head', function ($query) use ($user) {
@@ -630,13 +793,13 @@ class TaskController extends Controller
                             ->orderBy('name', 'asc')
                             ->get();
 
-            // Truy vấn dữ liệu công việc
+            // Build task query
             $query = Task::with(['assignedUsers', 'department'])
                         ->when($user->role === 'Department Head', function ($query) use ($user) {
                             $query->where('department_id', $user->department_id);
                         });
 
-            // Lọc theo năm học
+            // Apply filters
             if ($academic_year) {
                 $start_year = $academic_year;
                 $end_year = $academic_year + 1;
@@ -645,22 +808,19 @@ class TaskController extends Controller
                     "$end_year-12-31 23:59:59"
                 ]);
             }
-
-            // Lọc theo bộ môn
             if ($department_id) {
                 $query->where('department_id', $department_id);
             }
-
-            // Lọc theo giảng viên
             if ($lecturer_id) {
                 $query->whereHas('assignedUsers', function ($q) use ($lecturer_id) {
                     $q->where('users.user_id', $lecturer_id);
                 });
             }
 
+            // Fetch tasks
             $tasks = $query->get();
 
-            // Tính toán thống kê theo giảng viên
+            // Calculate lecturer statistics
             $lecturerStats = $tasks->flatMap(function ($task) {
                 return $task->assignedUsers->map(function ($user) use ($task) {
                     return ['user_id' => $user->user_id, 'task' => $task];
@@ -678,7 +838,7 @@ class TaskController extends Controller
                 })->count();
                 $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
 
-                // Tính điểm đánh giá trung bình
+                // Calculate average evaluation score
                 $evaluations = $group->pluck('task')->filter(function ($task) {
                     return $task->evaluation_level !== null;
                 })->map(function ($task) {
@@ -708,6 +868,7 @@ class TaskController extends Controller
                 ];
             })->sortBy([[$sort_by, $sort_order]])->values();
 
+            // Handle empty results
             if ($lecturerStats->isEmpty() && $request->filled(['academic_year', 'department_id', 'lecturer_id'])) {
                 return view('dashboard.annual-evaluation', compact('departments', 'lecturers', 'lecturerStats'))
                     ->with('error', 'Không có dữ liệu cho năm này.');
@@ -722,6 +883,12 @@ class TaskController extends Controller
         }
     }
 
+    /**
+     * Export the annual evaluation report as a PDF.
+     *
+     * @param  \App\Http\Requests\AnnualEvaluationReportRequest  $request
+     * @return \Illuminate\Http\Response|\Illuminate\Http\RedirectResponse
+     */
     public function exportAnnualEvaluationReport(AnnualEvaluationReportRequest $request)
     {
         $validated = $request->validated();
@@ -731,11 +898,13 @@ class TaskController extends Controller
 
         try {
             $user = Auth::user();
+            // Build task query
             $query = Task::with(['assignedUsers', 'department'])
                         ->when($user->role === 'Department Head', function ($query) use ($user) {
                             $query->where('department_id', $user->department_id);
                         });
 
+            // Apply filters
             if ($academic_year) {
                 $start_year = $academic_year;
                 $end_year = $academic_year + 1;
@@ -744,19 +913,19 @@ class TaskController extends Controller
                     "$end_year-12-31 23:59:59"
                 ]);
             }
-
             if ($department_id) {
                 $query->where('department_id', $department_id);
             }
-
             if ($lecturer_id) {
                 $query->whereHas('assignedUsers', function ($q) use ($lecturer_id) {
                     $q->where('users.user_id', $lecturer_id);
                 });
             }
 
+            // Fetch tasks
             $tasks = $query->get();
 
+            // Calculate lecturer statistics
             $lecturerStats = $tasks->flatMap(function ($task) {
                 return $task->assignedUsers->map(function ($user) use ($task) {
                     return ['user_id' => $user->user_id, 'task' => $task];
@@ -774,6 +943,7 @@ class TaskController extends Controller
                 })->count();
                 $completionRate = $totalTasks > 0 ? round(($completedOnTime / $totalTasks) * 100, 2) : 0;
 
+                // Calculate average evaluation score
                 $evaluations = $group->pluck('task')->filter(function ($task) {
                     return $task->evaluation_level !== null;
                 })->map(function ($task) {
@@ -803,6 +973,7 @@ class TaskController extends Controller
                 ];
             })->values();
 
+            // Generate and download PDF
             $pdf = Pdf::loadView('dashboard.annual-evaluation-pdf', compact(
                 'lecturerStats', 'academic_year', 'department_id', 'lecturer_id'
             ));
