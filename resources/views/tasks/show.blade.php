@@ -112,24 +112,27 @@
 
                     @if(Auth::user()->role === 'Lecturer' && $task->assignedUsers->contains(Auth::user()))
                         <div class="flex space-x-2 mt-4">
-                             <a href="{{ route('tasks.update_progress_form', $task->id) }}" class="bg-yellow-500 text-white py-2 px-4 rounded-lg hover:bg-yellow-600 transition duration-200 text-sm">Cập nhật tiến độ</a>
-                             <a href="{{ route('tasks.request_extension_form', $task->id) }}" class="bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition duration-200 text-sm">Đề nghị gia hạn</a>
+                            <a href="{{ route('tasks.update_progress_form', $task->id) }}" class="bg-yellow-500 text-white py-2 px-4 rounded-lg hover:bg-yellow-600 transition duration-200 text-sm">Cập nhật tiến độ</a>
+                            <a href="{{ route('tasks.request_extension_form', $task->id) }}" class="bg-orange-500 text-white py-2 px-4 rounded-lg hover:bg-orange-600 transition duration-200 text-sm">Đề nghị gia hạn</a>
                         </div>
                     @endif
-                     @if(Auth::user()->role === 'Department Head' && Auth::user()->department_id === $task->department_id)
-                         <div class="flex space-x-2 mt-4">
+                    @if(Auth::user()->role === 'Department Head' && Auth::user()->department_id === $task->department_id)
+                        <div class="flex space-x-2 mt-4">
                             @if($task->status === 'Completed' && !$task->evaluation_level)
                                 <a href="{{ route('tasks.evaluate_form', $task->id) }}" class="bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition duration-200 text-sm">Đánh giá</a>
                             @endif
-                            <a href="#" class="bg-indigo-500 text-white py-2 px-4 rounded-lg hover:bg-indigo-600 transition duration-200 text-sm">Sửa công việc</a>
+                            @if(!in_array($task->status, ['Completed', 'Evaluated']))
+                                <a href="{{ route('tasks.edit', $task->id) }}" class="bg-yellow-500 text-white py-2 px-4 rounded-lg hover:bg-yellow-600 transition duration-200 text-sm">Sửa công việc</a>
+                            @else
+                                <span class="bg-gray-400 text-gray-600 py-2 px-4 rounded-lg text-sm cursor-not-allowed" title="Không thể sửa công việc đã hoàn thành">Sửa công việc</span>
+                            @endif
                             <form action="{{ route('tasks.destroy', $task->id) }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn xóa công việc này?');" style="display: inline;">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition duration-200 text-sm">Xóa công việc</button>
                             </form>
-                         </div>
+                        </div>
                     @endif
-
                 </div>
             </div>
         </div>
@@ -144,7 +147,7 @@
                             @if($progress->comment)
                                 <p class="text-gray-600 mt-1 pl-4 italic">"{{ $progress->comment }}"</p>
                             @endif
-                             @if($progress->attachment)
+                            @if($progress->attachment)
                                 <p class="text-gray-600 mt-1 pl-4">
                                     <a href="{{ Storage::url($progress->attachment) }}" target="_blank" class="text-blue-500 hover:underline">Xem file đính kèm</a>
                                 </p>
@@ -158,36 +161,35 @@
         </div>
 
         <div class="bg-white rounded-lg shadow-lg p-6">
-             <h4 class="text-xl font-semibold text-gray-700 mb-3">Lịch sử Đề nghị Gia hạn</h4>
-             @if($task->extensionRequests->isNotEmpty())
-                 <ul class="space-y-3">
-                     @foreach($task->extensionRequests->sortByDesc('created_at') as $extension)
-                         <li class="border-b pb-3 last:border-b-0">
-                             <p><strong class="font-medium">{{ $extension->user->name ?? 'N/A' }}</strong> đã yêu cầu gia hạn đến <strong class="text-red-600">{{ $extension->new_due_date->format('d/m/Y') }}</strong> vào lúc {{ $extension->created_at->format('d/m/Y H:i') }}</p>
-                             <p class="text-gray-600 mt-1 pl-4">Lý do: <span class="italic">"{{ $extension->reason }}"</span></p>
-                             <p class="mt-1 pl-4">Trạng thái:
+            <h4 class="text-xl font-semibold text-gray-700 mb-3">Lịch sử Đề nghị Gia hạn</h4>
+            @if($task->extensionRequests->isNotEmpty())
+                <ul class="space-y-3">
+                    @foreach($task->extensionRequests->sortByDesc('created_at') as $extension)
+                        <li class="border-b pb-3 last:border-b-0">
+                            <p><strong class="font-medium">{{ $extension->user->name ?? 'N/A' }}</strong> đã yêu cầu gia hạn đến <strong class="text-red-600">{{ $extension->new_due_date->format('d/m/Y') }}</strong> vào lúc {{ $extension->created_at->format('d/m/Y H:i') }}</p>
+                            <p class="text-gray-600 mt-1 pl-4">Lý do: <span class="italic">"{{ $extension->reason }}"</span></p>
+                            <p class="mt-1 pl-4">Trạng thái:
                                 <span class="font-semibold
-                                     @if($extension->status == 'Pending') text-yellow-600
-                                     @elseif($extension->status == 'Approved') text-green-600
-                                     @elseif($extension->status == 'Rejected') text-red-600
-                                     @endif">
-                                     {{ $extension->status }}
-                                 </span>
-                                 @if($extension->approved_by)
-                                      (bởi {{ $extension->approver->name ?? 'N/A' }} vào {{ $extension->updated_at->format('d/m/Y H:i') }})
-                                 @endif
-                             </p>
-                             @if($extension->comment)
-                                 <p class="text-gray-600 mt-1 pl-4">Nhận xét: <span class="italic">"{{ $extension->comment }}"</span></p>
-                             @endif
-                         </li>
-                     @endforeach
-                 </ul>
-             @else
-                 <p class="text-gray-500 italic">Chưa có yêu cầu gia hạn nào.</p>
-             @endif
-         </div>
-
+                                    @if($extension->status == 'Pending') text-yellow-600
+                                    @elseif($extension->status == 'Approved') text-green-600
+                                    @elseif($extension->status == 'Rejected') text-red-600
+                                    @endif">
+                                    {{ $extension->status }}
+                                </span>
+                                @if($extension->approved_by)
+                                    (bởi {{ $extension->approver->name ?? 'N/A' }} vào {{ $extension->updated_at->format('d/m/Y H:i') }})
+                                @endif
+                            </p>
+                            @if($extension->comment)
+                                <p class="text-gray-600 mt-1 pl-4">Nhận xét: <span class="italic">"{{ $extension->comment }}"</span></p>
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            @else
+                <p class="text-gray-500 italic">Chưa có yêu cầu gia hạn nào.</p>
+            @endif
+        </div>
     </div>
 </body>
 </html>

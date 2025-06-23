@@ -30,7 +30,7 @@
     <div class="container mx-auto mt-8 px-4 pb-16">
         <!-- Page title and actions -->
         <div class="flex justify-between items-center mb-8">
-            <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Dashboard Trưởng Bộ môn</h2>
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Dashboard Trưởng bộ môn</h2>
             <div class="flex space-x-4">
                 <a href="{{ route('tasks.assign') }}" class="bg-blue-600 text-white py-2 px-4 md:py-3 md:px-6 rounded-lg hover:bg-blue-700 transition duration-200 shadow-md transform hover:scale-105 text-sm md:text-base">Phân công công việc</a>
                 <a href="{{ route('tasks.extension_requests') }}" class="bg-yellow-600 text-white py-2 px-4 md:py-3 md:px-6 rounded-lg hover:bg-yellow-700 transition duration-200 shadow-md transform hover:scale-105 text-sm md:text-base">Xem các yêu cầu gia hạn</a>
@@ -89,10 +89,15 @@
                             </td>
                             <td class="py-3 px-6 text-center">
                                 {{ $task->due_date->format('d/m/Y') }}
-                                @if($task->due_date->isPast() && !in_array($task->status, ['Completed', 'Evaluated']))
-                                    <span class="ml-1 bg-red-200 text-red-600 py-1 px-2 rounded-full text-xs">Quá hạn</span>
-                                @elseif($task->due_date->isFuture() && $task->due_date->diffInDays(now()) <= 3 && !in_array($task->status, ['Completed', 'Evaluated']))
-                                    <span class="ml-1 bg-yellow-200 text-yellow-600 py-1 px-2 rounded-full text-xs">Sắp hạn</span>
+                                @php
+                                    $daysLeft = now()->diffInDays($task->due_date, false);
+                                @endphp
+                                @if($daysLeft > 7 && !in_array($task->status, ['Completed', 'Evaluated']))
+                                    <!-- Trống nếu còn > 7 ngày -->
+                                @elseif($daysLeft > 0 && $daysLeft <= 7 && !in_array($task->status, ['Completed', 'Evaluated']))
+                                    <span class="ml-1 bg-yellow-400 text-gray-900 py-1 px-2 rounded-full text-xs">Sắp hạn</span>
+                                @elseif($daysLeft <= 0 && !in_array($task->status, ['Completed', 'Evaluated']))
+                                    <span class="ml-1 bg-red-500 text-white py-1 px-2 rounded-full text-xs">Quá hạn</span>
                                 @endif
                             </td>
                             <td class="py-3 px-6 text-center">
@@ -123,9 +128,15 @@
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         </span>
                                     @endif
-                                    <a href="#" class="text-yellow-600 hover:text-yellow-900" title="Sửa công việc">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                    </a>
+                                    @if(!in_array($task->status, ['Completed', 'Evaluated']))
+                                        <a href="{{ route('tasks.edit', $task->id) }}" class="text-yellow-600 hover:text-yellow-900" title="Sửa công việc">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                        </a>
+                                    @else
+                                        <span class="text-gray-400" title="Không thể sửa công việc đã hoàn thành">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                        </span>
+                                    @endif
                                     <form action="{{ route('tasks.destroy', $task->id) }}" method="POST" onsubmit="return confirm('Bạn có chắc chắn muốn xóa công việc này?');" style="display: inline;">
                                         @csrf
                                         @method('DELETE')

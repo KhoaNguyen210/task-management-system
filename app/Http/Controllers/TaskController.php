@@ -812,4 +812,93 @@ class TaskController extends Controller
             return redirect()->back()->with('error', 'Có lỗi xảy ra khi xuất báo cáo. Vui lòng thử lại sau.');
         }
     }
+
+    public function showEditForm($taskId)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'Department Head') {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền chỉnh sửa công việc.');
+        }
+
+        try {
+            $task = Task::with(['assignedUsers'])->findOrFail($taskId);
+
+            if ($user->department_id !== $task->department_id) {
+                return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền chỉnh sửa công việc này.');
+            }
+
+            if (in_array($task->status, ['Completed', 'Evaluated'])) {
+                return redirect()->route('dashboard.department_head')->with('error', 'Không thể chỉnh sửa công việc đã hoàn thành hoặc được đánh giá.');
+            }
+
+            $departmentId = $user->department_id;
+            $lecturers = User::where('department_id', $departmentId)
+                            ->where('role', 'Lecturer')
+                            ->where('user_id', '!=', Auth::id())
+                            ->orderBy('name', 'asc')
+                            ->get();
+
+            return view('tasks.edit', compact('task', 'lecturers'));
+        } catch (\Exception $e) {
+            Log::error('Error showing task edit form: ' . $e->getMessage());
+            return redirect()->route('dashboard.department_head')->with('error', 'Có lỗi xảy ra khi hiển thị form chỉnh sửa.');
+        }
+    }
+
+    public function updateTask(Request $request, $taskId)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'Department Head') {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền chỉnh sửa công việc.');
+        }
+
+        $task = Task::with(['assignedUsers'])->findOrFail($taskId);
+
+        if ($user->department_id !== $task->department_id) {
+            return redirect()->route('dashboard.department_head')->with('error', 'Bạn không có quyền chỉnh sửa công việc này.');
+        }
+
+        if (in_array($task->status, ['Completed', 'Evaluated'])) {
+            return redirect()->route('dashboard.department_head')->with('error', 'Không thể chỉnh sửa công việc đã hoàn thành hoặc được đánh giá.');
+        }
+
+        $validationRules = [
+            'title' => 'required|string|max:255',
+            'description' => 'required|string',
+            'due_date' => 'required|date|after_or_equal:today',
+        ];
+
+        if ($task->status === 'Not Started') {
+            $validationRules['assigned_users'] = 'required|array|min:1';
+            $validationRules['assigned_users.*'] = 'required|exists:users,user_id';
+        }
+
+        $request->validate($validationRules);
+
+        DB::beginTransaction();
+        try {
+            $task->title = $request->title;
+            $task->description = $request->description;
+            $task->due_date = $request->due_date;
+            $task->save();
+
+            if ($task->status === 'Not Started' && $request->has('assigned_users')) {
+                $task->assignedUsers()->sync($request->assigned_users);
+            }
+
+            Log::info('Task updated successfully: ', [
+                'task_id' => $task->id,
+                'title' => $task->title,
+                'status' => $task->status,
+                'updated_by' => $user->user_id,
+            ]);
+
+            DB::commit();
+            return redirect()->route('dashboard.department_head')->with('success', 'Công việc đã được cập nhật thành công.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error updating task: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Có lỗi xảy ra khi cập nhật công việc. Vui lòng thử lại.')->withInput();
+        }
+    }
 }

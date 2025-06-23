@@ -29,8 +29,8 @@ Route::middleware('auth')->group(function () {
 
     // --- Overview Report Route (UC-09) ---
     Route::middleware(['check_auth_role:Dean'])->group(function () {
-        Route::get('/dashboard/overview', [TaskController::class, 'overviewReport'])->name('dashboard.overview');
-        Route::post('/dashboard/overview/export', [TaskController::class, 'exportReport'])->name('dashboard.overview.export');
+        Route::get('/dashboard-overview', [TaskController::class, 'overviewReport'])->name('dashboard.overview');
+        Route::post('/dashboard-overview/export', [TaskController::class, 'exportReport'])->name('dashboard.overview.export');
     });
 
     // --- Annual Evaluation Report Route (UC-12) ---
@@ -45,6 +45,9 @@ Route::middleware('auth')->group(function () {
         Route::middleware(['check_auth_role:Department Head'])->group(function () {
             Route::get('/assign', [TaskController::class, 'assignTasks'])->name('assign');
             Route::post('/assign', [TaskController::class, 'storeTask'])->name('store');
+            // Route chỉnh sửa công việc
+            Route::get('/edit/{id}', [TaskController::class, 'showEditForm'])->name('edit');
+            Route::post('/update/{id}', [TaskController::class, 'updateTask'])->name('update');
         });
 
         // Route cập nhật tiến độ và đề nghị gia hạn (Chỉ cho Lecturer)
