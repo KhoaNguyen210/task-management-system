@@ -47,11 +47,25 @@ class DashboardController extends Controller
 
     public function deanDashboard()
     {
+        // Lấy tổng số công việc trong toàn hệ thống
+        $totalTasks = Task::count();
+
+        // Lấy tổng số giảng viên (giả sử giảng viên có vai trò 'lecturer' hoặc tương tự)
+        // Bạn cần điều chỉnh 'lecturer' nếu vai trò của giảng viên trong bảng `users` là khác
+        $totalLecturers = User::where('role', 'lecturer')->count();
+
+        // Tính tỷ lệ hoàn thành công việc trong toàn hệ thống
+        // Đếm cả công việc có trạng thái Completed và Evaluated
+        $completedTasks = Task::whereIn('status', ['Completed', 'Evaluated'])->count();
+        $completionRate = ($totalTasks > 0) ? round(($completedTasks / $totalTasks) * 100) : 0;
+
+        // Lấy các công việc chính để hiển thị bảng (nếu cần)
         $tasks = Task::with(['assignedUsers', 'department', 'creatorUser'])
                      ->orderBy('due_date', 'asc')
                      ->paginate(15);
 
-        return view('dashboard.dean', compact('tasks'));
+        // Truyền tất cả các biến cần thiết sang view
+        return view('dashboard.dean', compact('tasks', 'totalTasks', 'totalLecturers', 'completionRate'));
     }
 
     public function secretaryDashboard()

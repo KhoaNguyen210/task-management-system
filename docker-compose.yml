@@ -1,0 +1,50 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_app
+    ports:
+      - "8000:80" # Map port 8000 trên host đến port 80 trong container
+    volumes:
+      - .:/var/www/html # ĐỒNG BỘ CODE GIỮA HOST VÀ CONTAINER
+      - ./docker/php.ini:/usr/local/etc/php/conf.d/php.ini # Cấu hình PHP
+    environment:
+      # Cấu hình biến môi trường cho Laravel
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: task_management_db
+      DB_USERNAME: root
+      DB_PASSWORD: password # Đặt mật khẩu MySQL của bạn
+    depends_on:
+      - db
+      - node # Đảm bảo node service chạy trước để Vite sẵn sàng
+
+  db:
+    image: mysql:8.0 # Sử dụng MySQL phiên bản 8.0
+    container_name: mysql_db
+    ports:
+      - "3306:3306" # Map port 3306 trên host đến port 3306 trong container
+    environment:
+      MYSQL_ROOT_PASSWORD: password # Đặt mật khẩu root cho MySQL
+      MYSQL_DATABASE: task_management_db # Tên database Laravel sẽ sử dụng
+    volumes:
+      - db_data:/var/lib/mysql # Lưu trữ dữ liệu database để không bị mất khi container bị xóa
+
+  node:
+    build:
+      context: .
+      dockerfile: docker/node/Dockerfile
+    container_name: node_vite
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+volumes:
+  db_data:

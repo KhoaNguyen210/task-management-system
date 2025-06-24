@@ -41,15 +41,15 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="bg-blue-100 p-4 rounded-lg shadow-sm text-center">
                     <h4 class="text-lg font-semibold text-blue-800">Tổng công việc</h4>
-                    <p class="text-2xl font-bold text-blue-600">10</p>
+                    <p class="text-2xl font-bold text-blue-600">{{ $totalTasks }}</p>
                 </div>
                 <div class="bg-green-100 p-4 rounded-lg shadow-sm text-center">
                     <h4 class="text-lg font-semibold text-green-800">Số lượng giảng viên</h4>
-                    <p class="text-2xl font-bold text-green-600">5</p>
+                    <p class="text-2xl font-bold text-green-600">{{ $totalLecturers }}</p>
                 </div>
                 <div class="bg-teal-100 p-4 rounded-lg shadow-sm text-center">
                     <h4 class="text-lg font-semibold text-teal-800">Tỷ lệ hoàn thành</h4>
-                    <p class="text-2xl font-bold text-teal-600">50%</p>
+                    <p class="text-2xl font-bold text-teal-600">{{ $completionRate }}%</p>
                 </div>
             </div>
         </div>
